@@ -93,6 +93,9 @@ if ! docker compose up -d --build; then
   exit 1
 fi
 
+# Reload Nginx to immediately flush internal container DNS cache
+docker compose restart nginx >/dev/null 2>&1 || true
+
 # Stage 7: Post-Update Health Probe
 log_info "Stage 7: Validating microservice operational health..."
 MAX_RETRIES=15

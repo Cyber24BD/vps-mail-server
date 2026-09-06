@@ -1,5 +1,5 @@
-hosts = postgres:5432
+hosts = postgres
 user = mailuser
 password = supersecurepassword123
 dbname = corpmail
-query = SELECT destination_email FROM aliases WHERE source_email='%s' AND is_active=true UNION SELECT m.email FROM mailboxes m JOIN mailing_group_members gm ON m.id = gm.mailbox_id JOIN mailing_groups g ON gm.group_id = g.id WHERE g.group_email='%s' AND m.is_active=true
+query = SELECT destination_email FROM aliases WHERE LOWER(source_email)=LOWER('%s') AND is_active=true UNION SELECT m.email FROM mailboxes m JOIN mailing_group_members gm ON m.id = gm.mailbox_id JOIN mailing_groups g ON gm.group_id = g.id WHERE LOWER(g.group_email)=LOWER('%s') AND m.is_active=true

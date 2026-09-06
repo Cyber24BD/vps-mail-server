@@ -40,3 +40,8 @@ class AdminRepository:
     async def list_all(self) -> List[Administrator]:
         result = await self.db.execute(select(Administrator).order_by(Administrator.created_at.desc()))
         return list(result.scalars().all())
+
+    async def update_password(self, admin: Administrator, new_password: str) -> Administrator:
+        admin.password_hash = get_password_hash(new_password)
+        await self.db.flush()
+        return admin

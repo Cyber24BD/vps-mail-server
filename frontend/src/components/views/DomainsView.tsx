@@ -99,8 +99,41 @@ export const DomainsView: React.FC = () => {
     }
   };
 
-  const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
+  const copyToClipboard = async (text: string, id: string) => {
+    let copied = false;
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } catch {
+        copied = false;
+      }
+    }
+
+    if (!copied) {
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.top = '0';
+        textArea.style.left = '0';
+        textArea.style.width = '2em';
+        textArea.style.height = '2em';
+        textArea.style.padding = '0';
+        textArea.style.border = 'none';
+        textArea.style.outline = 'none';
+        textArea.style.boxShadow = 'none';
+        textArea.style.background = 'transparent';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      } catch (err) {
+        console.error('Copy fallback error:', err);
+      }
+    }
+
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
@@ -202,8 +235,41 @@ export const DomainsView: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleCopyZoneContent = () => {
-    navigator.clipboard.writeText(zoneFileContent);
+  const handleCopyZoneContent = async () => {
+    let copied = false;
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(zoneFileContent);
+        copied = true;
+      } catch {
+        copied = false;
+      }
+    }
+
+    if (!copied) {
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = zoneFileContent;
+        textArea.style.position = 'fixed';
+        textArea.style.top = '0';
+        textArea.style.left = '0';
+        textArea.style.width = '2em';
+        textArea.style.height = '2em';
+        textArea.style.padding = '0';
+        textArea.style.border = 'none';
+        textArea.style.outline = 'none';
+        textArea.style.boxShadow = 'none';
+        textArea.style.background = 'transparent';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      } catch (err) {
+        console.error('Zone copy fallback error:', err);
+      }
+    }
+
     setZoneCopied(true);
     setTimeout(() => setZoneCopied(false), 2500);
   };
@@ -406,21 +472,20 @@ export const DomainsView: React.FC = () => {
                                 <button
                                   onClick={() => copyToClipboard(shortHost, `short-${record.id}`)}
                                   style={{
-                                    background: 'none',
-                                    border: '1px solid #E5E7EB',
+                                    background: isShortHostCopied ? '#EBFBEE' : '#FFFFFF',
+                                    border: isShortHostCopied ? '1px solid #2B8A3E' : '1px solid #D1D5DB',
                                     borderRadius: '4px',
                                     cursor: 'pointer',
                                     color: isShortHostCopied ? '#2B8A3E' : '#4B5563',
-                                    padding: '2px 5px',
+                                    padding: '3px 5px',
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '3px',
-                                    fontSize: '10px',
+                                    justifyContent: 'center',
+                                    transition: 'all 150ms ease',
                                   }}
-                                  title="Copy DNS Name for Cloudflare/Registrar"
+                                  title={isShortHostCopied ? 'Copied!' : 'Copy DNS Name'}
                                 >
-                                  {isShortHostCopied ? <Check size={11} strokeWidth={2.5} /> : <Copy size={11} />}
-                                  <span>{isShortHostCopied ? 'Copied' : 'Copy'}</span>
+                                  {isShortHostCopied ? <Check size={12} strokeWidth={2.5} color="#2B8A3E" /> : <Copy size={12} />}
                                 </button>
                               </div>
 
@@ -430,17 +495,20 @@ export const DomainsView: React.FC = () => {
                                 <button
                                   onClick={() => copyToClipboard(record.host, `host-${record.id}`)}
                                   style={{
-                                    background: 'none',
-                                    border: 'none',
+                                    background: isHostCopied ? '#EBFBEE' : 'transparent',
+                                    border: isHostCopied ? '1px solid #2B8A3E' : '1px solid transparent',
+                                    borderRadius: '4px',
                                     cursor: 'pointer',
                                     color: isHostCopied ? '#2B8A3E' : '#9CA3AF',
-                                    padding: '2px',
+                                    padding: '2px 4px',
                                     display: 'inline-flex',
                                     alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 150ms ease',
                                   }}
-                                  title="Copy Full FQDN"
+                                  title={isHostCopied ? 'Copied!' : 'Copy Full FQDN'}
                                 >
-                                  {isHostCopied ? <Check size={11} strokeWidth={2.5} /> : <Copy size={11} />}
+                                  {isHostCopied ? <Check size={12} strokeWidth={2.5} color="#2B8A3E" /> : <Copy size={12} />}
                                 </button>
                               </div>
                             </div>
@@ -460,17 +528,17 @@ export const DomainsView: React.FC = () => {
                                     onClick={() => copyToClipboard(mxServer, `mx-srv-${record.id}`)}
                                     className="btn-secondary"
                                     style={{
-                                      padding: '3px 8px',
-                                      fontSize: '11px',
-                                      gap: '4px',
+                                      padding: '5px 7px',
                                       backgroundColor: isMxServerCopied ? '#EBFBEE' : '#FFFFFF',
                                       borderColor: isMxServerCopied ? '#2B8A3E' : '#D1D5DB',
-                                      color: isMxServerCopied ? '#1B5E20' : '#374151',
+                                      color: isMxServerCopied ? '#2B8A3E' : '#4B5563',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
                                     }}
-                                    title="Copy Mail Server"
+                                    title={isMxServerCopied ? 'Copied!' : 'Copy Mail Server'}
                                   >
-                                    {isMxServerCopied ? <Check size={11} strokeWidth={2.5} /> : <Copy size={11} />}
-                                    <span>{isMxServerCopied ? 'Copied' : 'Copy Server'}</span>
+                                    {isMxServerCopied ? <Check size={13} strokeWidth={2.5} color="#2B8A3E" /> : <Copy size={13} />}
                                   </button>
                                 </div>
 
@@ -483,17 +551,17 @@ export const DomainsView: React.FC = () => {
                                     onClick={() => copyToClipboard(mxPriority, `mx-pri-${record.id}`)}
                                     className="btn-secondary"
                                     style={{
-                                      padding: '3px 8px',
-                                      fontSize: '11px',
-                                      gap: '4px',
+                                      padding: '5px 7px',
                                       backgroundColor: isMxPriorityCopied ? '#EBFBEE' : '#FFFFFF',
                                       borderColor: isMxPriorityCopied ? '#2B8A3E' : '#D1D5DB',
-                                      color: isMxPriorityCopied ? '#1B5E20' : '#374151',
+                                      color: isMxPriorityCopied ? '#2B8A3E' : '#4B5563',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
                                     }}
-                                    title="Copy Priority"
+                                    title={isMxPriorityCopied ? 'Copied!' : 'Copy Priority'}
                                   >
-                                    {isMxPriorityCopied ? <Check size={11} strokeWidth={2.5} /> : <Copy size={11} />}
-                                    <span>{isMxPriorityCopied ? 'Copied' : 'Copy Priority'}</span>
+                                    {isMxPriorityCopied ? <Check size={13} strokeWidth={2.5} color="#2B8A3E" /> : <Copy size={13} />}
                                   </button>
                                 </div>
                               </div>
@@ -522,19 +590,19 @@ export const DomainsView: React.FC = () => {
                                   onClick={() => copyToClipboard(record.expected_value, `exp-${record.id}`)}
                                   className="btn-secondary"
                                   style={{
-                                    padding: '4px 8px',
-                                    fontSize: '11px',
-                                    gap: '4px',
+                                    padding: '6px 8px',
                                     flexShrink: 0,
                                     marginTop: '2px',
                                     backgroundColor: isExpectedCopied ? '#EBFBEE' : '#FFFFFF',
                                     borderColor: isExpectedCopied ? '#2B8A3E' : '#D1D5DB',
-                                    color: isExpectedCopied ? '#1B5E20' : '#374151',
+                                    color: isExpectedCopied ? '#2B8A3E' : '#4B5563',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
                                   }}
-                                  title="Copy value to clipboard"
+                                  title={isExpectedCopied ? 'Copied!' : 'Copy Value'}
                                 >
-                                  {isExpectedCopied ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} />}
-                                  <span>{isExpectedCopied ? 'Copied' : 'Copy Value'}</span>
+                                  {isExpectedCopied ? <Check size={13} strokeWidth={2.5} color="#2B8A3E" /> : <Copy size={13} />}
                                 </button>
                               </div>
                             )}

@@ -35,12 +35,7 @@ class CryptoService:
         pub_b64 = base64.b64encode(public_der).decode("utf-8")
         dns_txt_record = f"v=DKIM1; k=rsa; p={pub_b64}"
 
-        public_pem = public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
-        ).decode("utf-8")
-
-        return private_pem, public_pem, dns_txt_record
+        return private_pem, pub_b64, dns_txt_record
 
     @staticmethod
     def save_dkim_to_disk(domain_name: str, selector: str, private_pem: str) -> str:

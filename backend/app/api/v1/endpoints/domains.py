@@ -42,7 +42,7 @@ async def create_domain(
     mail_host = mail_host.lower().strip()
 
     # 1. Generate 2048-bit RSA DKIM keypair
-    priv_pem, pub_pem, dkim_dns = CryptoService.generate_dkim_keypair()
+    priv_pem, pub_b64, dkim_dns = CryptoService.generate_dkim_keypair()
     CryptoService.save_dkim_to_disk(clean_name, "mail", priv_pem)
 
     # 2. Persist domain
@@ -50,7 +50,7 @@ async def create_domain(
         name=clean_name,
         mail_hostname=mail_host,
         dkim_priv=priv_pem,
-        dkim_pub=pub_pem
+        dkim_pub=pub_b64
     )
 
     # 3. Create initial expected DNS records

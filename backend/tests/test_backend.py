@@ -6,8 +6,9 @@ from app.core.security import get_password_hash, verify_password, create_access_
 def test_dkim_key_generation():
     priv, pub, dkim_dns = CryptoService.generate_dkim_keypair()
     assert "-----BEGIN PRIVATE KEY-----" in priv
-    assert "-----BEGIN PUBLIC KEY-----" in pub
-    assert dkim_dns.startswith("v=DKIM1; k=rsa; p=")
+    assert "-----BEGIN PUBLIC KEY-----" not in pub
+    assert pub.startswith("MIIB")
+    assert dkim_dns == f"v=DKIM1; k=rsa; p={pub}"
     assert len(dkim_dns) > 100
 
 

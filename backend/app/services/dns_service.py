@@ -125,7 +125,14 @@ class DnsService:
 
         # 4. DKIM (TXT Record)
         dkim_host = f"{dkim_selector}._domainkey.{domain_name}"
-        expected_dkim = f"v=DKIM1; k=rsa; p={expected_dkim_pub}"
+        clean_pub = (expected_dkim_pub or "")\
+            .replace("-----BEGIN PUBLIC KEY-----", "")\
+            .replace("-----END PUBLIC KEY-----", "")\
+            .replace("\n", "")\
+            .replace("\r", "")\
+            .replace(" ", "")\
+            .strip()
+        expected_dkim = f"v=DKIM1; k=rsa; p={clean_pub}"
         res_dkim = self.query_txt_record(dkim_host)
         status_dkim = "missing"
         detected_dkim = None

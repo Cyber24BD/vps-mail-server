@@ -13,6 +13,7 @@ source "${SCRIPT_DIR}/scripts/preflight.sh"
 source "${SCRIPT_DIR}/scripts/docker_check.sh"
 source "${SCRIPT_DIR}/scripts/storage_setup.sh"
 source "${SCRIPT_DIR}/scripts/config_sync.sh"
+source "${SCRIPT_DIR}/scripts/admin_setup.sh"
 
 # Global Error Trap Handler
 trap_error() {
@@ -83,21 +84,42 @@ if [ $COUNT -eq $MAX_RETRIES ]; then
 fi
 log_success "PostgreSQL is online and accepting connections."
 
+# Stage 7: Super Administrator Provisioning
+log_info "Stage 7: Configuring Super Administrator Account..."
+setup_super_admin
+
 # Final Success Banner
 echo ""
 echo -e "${GREEN}==============================================================================${NC}"
 echo -e "${GREEN}  Corporate Mail Platform Installed Successfully!${NC}"
 echo -e "${GREEN}==============================================================================${NC}"
 echo ""
-echo -e "Access your Control Panel in ${YELLOW}Bootstrap Mode${NC} to run the First-Time Setup Wizard:"
-echo ""
-echo -e "  🌐 ${CYAN}http://${PUBLIC_IP}:${CHOSEN_CONTROL_PORT}${NC}"
-echo ""
-echo -e "Available Next Steps in the Setup Wizard:"
-echo -e "  1. Connect your Primary Corporate Mail Domain (e.g. company.com)"
-echo -e "  2. Review Generated DNS Records (MX, SPF, DKIM 2048-bit, DMARC, PTR)"
-echo -e "  3. Issue Free Let's Encrypt SSL Certificate with 1-Click"
-echo -e "  4. Create Employee Mailboxes & Access Custom Webmail"
+
+if [ "$ADMIN_CREATED_IN_CLI" = true ]; then
+  echo -e "Control Panel URL:"
+  echo -e "  🌐 ${CYAN}http://${PUBLIC_IP}:${CHOSEN_CONTROL_PORT}${NC}"
+  echo ""
+  echo -e "Super Administrator Credentials:"
+  echo -e "  👤 Username: ${YELLOW}${ADMIN_CLI_USER}${NC}"
+  echo -e "  🔑 Password: ${YELLOW}[Configured during install]${NC}"
+  echo ""
+  echo -e "Next Steps:"
+  echo -e "  1. Sign in to your Control Panel using the credentials above"
+  echo -e "  2. Connect your Corporate Mail Domain (e.g. company.com)"
+  echo -e "  3. Configure DNS Records (MX, SPF, DKIM 2048-bit, DMARC)"
+  echo -e "  4. Provision Employee Mailboxes & Access Custom Webmail"
+else
+  echo -e "Access your Control Panel to complete Setup Wizard:"
+  echo ""
+  echo -e "  🌐 ${CYAN}http://${PUBLIC_IP}:${CHOSEN_CONTROL_PORT}${NC}"
+  echo ""
+  echo -e "Next Steps in Setup Wizard:"
+  echo -e "  1. Automated Server & IP Inspection"
+  echo -e "  2. Connect your Primary Corporate Mail Domain (e.g. company.com)"
+  echo -e "  3. Review Generated DNS Records (MX, SPF, DKIM 2048-bit, DMARC)"
+  echo -e "  4. Create your Super Administrator Account & Launch Dashboard"
+fi
+
 echo ""
 echo -e "Management Commands:"
 echo -e "  • 1-Click Update:   ${YELLOW}sudo ./update.sh${NC}"

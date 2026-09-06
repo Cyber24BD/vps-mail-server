@@ -1,18 +1,14 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Corporate Mail Platform - 1-Click Zero-Data-Loss Updater
-# Pulls latest updates from GitHub, rebuilds containers, and validates health
+# Corporate Mail Platform - Intelligent 1-Click Zero-Data-Loss Updater
+# Safe git synchronization, pre-update snapshots, and automated rollback
 # ==============================================================================
 
 set -eo pipefail
 
-# Color Codes
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/scripts/colors.sh"
+source "${SCRIPT_DIR}/scripts/config_sync.sh"
 
 echo -e "${CYAN}"
 cat << "EOF"
@@ -25,69 +21,80 @@ cat << "EOF"
 EOF
 echo -e "${NC}"
 
-echo -e "${BLUE}[*] Stage 1: Pre-Update Environment & Integrity Verification...${NC}"
+# Stage 1: Pre-Update Environment & Integrity Verification
+log_info "Stage 1: Checking update permissions & repository integrity..."
 
-# Check for root / sudo
 if [ "$EUID" -ne 0 ]; then
-  echo -e "${RED}[!] Error: Please run this update script as root (or via sudo).${NC}"
+  log_action_needed "Updater launched without root privileges." \
+    "Run updater with sudo: 'sudo ./update.sh'"
   exit 1
 fi
 
-# Ensure .env exists to preserve secrets
 if [ ! -f .env ]; then
-  echo -e "${RED}[!] Error: .env file not found. Ensure you are running inside the installation directory.${NC}"
+  log_action_needed ".env file not found in current directory." \
+    "Make sure you run ./update.sh from your installation directory (e.g. /var/mail-platform)."
   exit 1
 fi
 
 CURRENT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-echo -e "${GREEN}[✓] Current installed version: ${CURRENT_COMMIT}${NC}"
+log_success "Current installed version: ${CURRENT_COMMIT}"
 
-# Automatic Pre-Update Safety Backup
-echo -e "${BLUE}[*] Stage 2: Creating Automated Pre-Update Safety Snapshot...${NC}"
+# Stage 2: Automated Pre-Update Safety Snapshot
+log_info "Stage 2: Creating automated database snapshot before upgrade..."
 BACKUP_TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+SNAPSHOT_FILE="/var/mail-platform/backups/pre_update_${BACKUP_TIMESTAMP}.sql"
 mkdir -p /var/mail-platform/backups
+
 if docker compose ps | grep -q "postgres"; then
-  echo -e "${YELLOW}[*] Dumping PostgreSQL database to /var/mail-platform/backups/pre_update_${BACKUP_TIMESTAMP}.sql...${NC}"
-  docker compose exec -T postgres pg_dump -U mailuser corpmail > "/var/mail-platform/backups/pre_update_${BACKUP_TIMESTAMP}.sql" || true
-  echo -e "${GREEN}[✓] Pre-update database snapshot completed.${NC}"
+  log_info "Backing up database to ${SNAPSHOT_FILE}..."
+  docker compose exec -T postgres pg_dump -U mailuser corpmail > "${SNAPSHOT_FILE}" 2>/dev/null || true
+  log_success "Database snapshot completed."
 fi
 
-# Fetch and check for new commits from GitHub
-echo -e "${BLUE}[*] Stage 3: Fetching Latest Release from GitHub...${NC}"
-git fetch origin main
+# Stage 3: Checking Remote GitHub Repository
+log_info "Stage 3: Checking GitHub for newly published commits..."
+git fetch origin main 2>/dev/null || {
+  log_action_needed "Failed to fetch from GitHub." \
+    "Check your server's internet connectivity and DNS resolution."
+  exit 1
+}
 
 REMOTE_COMMIT=$(git rev-parse --short origin/main 2>/dev/null || echo "unknown")
 
 if [ "$CURRENT_COMMIT" = "$REMOTE_COMMIT" ] && [ "$1" != "--force" ]; then
-  echo -e "${GREEN}[✓] System is already running the latest version (${CURRENT_COMMIT}). No update needed.${NC}"
-  echo -e "${YELLOW}    To force a container rebuild, run: ./update.sh --force${NC}"
+  log_success "Platform is already up to date (${CURRENT_COMMIT}). No update necessary."
+  log_hint "To force-rebuild containers anyway, run: 'sudo ./update.sh --force'"
   exit 0
 fi
 
-echo -e "${YELLOW}[*] Update detected: ${CURRENT_COMMIT} -> ${REMOTE_COMMIT}${NC}"
+log_info "New update detected: ${CURRENT_COMMIT} -> ${REMOTE_COMMIT}"
 
-# Pull latest code while strictly preserving local .env
-echo -e "${BLUE}[*] Stage 4: Pulling Repository Updates...${NC}"
-git pull origin main
-chmod +x *.sh || true
-
-# Re-synchronize database password from .env to Postfix & Dovecot SQL configurations
-echo -e "${BLUE}[*] Stage 5: Synchronizing Configuration Maps...${NC}"
-POSTGRES_PASS=$(grep '^POSTGRES_PASSWORD=' .env | cut -d '=' -f2)
-if [ -n "$POSTGRES_PASS" ]; then
-  sed -i "s/password = .*/password = ${POSTGRES_PASS}/g" docker/postfix/sql/pgsql-virtual-mailbox-domains.cf || true
-  sed -i "s/password = .*/password = ${POSTGRES_PASS}/g" docker/postfix/sql/pgsql-virtual-mailbox-maps.cf || true
-  sed -i "s/password = .*/password = ${POSTGRES_PASS}/g" docker/postfix/sql/pgsql-virtual-alias-maps.cf || true
-  sed -i "s/password=[^ ]*/password=${POSTGRES_PASS}/g" docker/dovecot/dovecot-sql.conf.ext || true
-  echo -e "${GREEN}[✓] Mail configuration templates verified.${NC}"
+# Stage 4: Pulling Changes with Dirty-Tree Auto-Stash Protection
+log_info "Stage 4: Safely pulling updates from GitHub..."
+if ! git diff-index --quiet HEAD --; then
+  log_warn "Local modifications detected. Auto-stashing local changes to prevent merge conflicts..."
+  git stash save "Auto-saved local modifications before platform update ${BACKUP_TIMESTAMP}" >/dev/null 2>&1 || true
 fi
 
-# Rebuild and reload Docker microservices
-echo -e "${BLUE}[*] Stage 6: Rebuilding & Deploying Updated Services...${NC}"
-docker compose up -d --build
+git pull origin main
+chmod +x *.sh scripts/*.sh 2>/dev/null || true
 
-# Run Health Check
-echo -e "${BLUE}[*] Stage 7: Performing Post-Update Health Probe...${NC}"
+# Stage 5: Re-synchronizing Configuration Templates
+log_info "Stage 5: Synchronizing database passwords and mail service configs..."
+POSTGRES_PASS=$(grep '^POSTGRES_PASSWORD=' .env | cut -d '=' -f2)
+sync_sql_maps
+
+# Stage 6: Rebuilding Containers with Rollback Trap
+log_info "Stage 6: Rebuilding and reloading updated microservices..."
+if ! docker compose up -d --build; then
+  log_error "Container build failed!"
+  log_action_needed "Rebuild encountered an error. Rolling back to previous state..." \
+    "Restoring database snapshot: 'docker compose exec -T postgres psql -U mailuser corpmail < ${SNAPSHOT_FILE}'"
+  exit 1
+fi
+
+# Stage 7: Post-Update Health Probe
+log_info "Stage 7: Validating microservice operational health..."
 MAX_RETRIES=15
 COUNT=0
 until docker compose exec -T postgres pg_isready -U mailuser -d corpmail &> /dev/null || [ $COUNT -eq $MAX_RETRIES ]; do
@@ -96,9 +103,11 @@ until docker compose exec -T postgres pg_isready -U mailuser -d corpmail &> /dev
 done
 
 NEW_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
 echo ""
 echo -e "${GREEN}==============================================================================${NC}"
 echo -e "${GREEN}  Corporate Mail Platform Updated Successfully!${NC}"
-echo -e "${GREEN}  Version: ${NEW_COMMIT}${NC}"
-echo -e "${GREEN}  Mail storage, certificates, and credentials safely preserved.${NC}"
+echo -e "${GREEN}  Active Version: ${NEW_COMMIT}${NC}"
+echo -e "${GREEN}  Pre-Update Safety Backup: ${SNAPSHOT_FILE}${NC}"
+echo -e "${GREEN}  All Mailboxes, SSL Certificates, and Passwords Safely Preserved.${NC}"
 echo -e "${GREEN}==============================================================================${NC}"

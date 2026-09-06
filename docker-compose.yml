@@ -103,10 +103,12 @@ services:
       - "25:25"
       - "465:465"
       - "587:587"
+    env_file:
+      - .env
     volumes:
       - ./docker/postfix/main.cf:/etc/postfix/main.cf:ro
       - ./docker/postfix/master.cf:/etc/postfix/master.cf:ro
-      - ./docker/postfix/sql:/etc/postfix/sql:ro
+      - ./docker/postfix/sql:/etc/postfix/sql
       - ${MAIL_DIR:-/var/mail-platform/vmail}:/var/mail-platform/vmail
       - ${SSL_DIR:-/var/mail-platform/ssl}:/etc/ssl/certs/corpmail:ro
       - ${DKIM_DIR:-/var/mail-platform/dkim}:/etc/dkim:ro
@@ -126,10 +128,12 @@ services:
     ports:
       - "143:143"
       - "993:993"
+    env_file:
+      - .env
     volumes:
       - ./docker/dovecot/dovecot.conf:/etc/dovecot/dovecot.conf:ro
       - ./docker/dovecot/conf.d:/etc/dovecot/conf.d:ro
-      - ./docker/dovecot/dovecot-sql.conf.ext:/etc/dovecot/dovecot-sql.conf.ext:ro
+      - ./docker/dovecot/dovecot-sql.conf.ext:/etc/dovecot/dovecot-sql.conf.ext
       - ${MAIL_DIR:-/var/mail-platform/vmail}:/var/mail-platform/vmail
       - ${SSL_DIR:-/var/mail-platform/ssl}:/etc/ssl/certs/corpmail:ro
     depends_on:

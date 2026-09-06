@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -95,7 +93,9 @@ services:
       - corpmail-net
 
   postfix:
-    image: bokom/postfix:latest
+    build:
+      context: ./docker/postfix
+      dockerfile: Dockerfile
     container_name: corpmail-postfix
     restart: always
     hostname: ${PRIMARY_HOSTNAME:-mail.example.com}
@@ -117,7 +117,9 @@ services:
       - corpmail-net
 
   dovecot:
-    image: dovecot/dovecot:latest
+    build:
+      context: ./docker/dovecot
+      dockerfile: Dockerfile
     container_name: corpmail-dovecot
     restart: always
     hostname: ${PRIMARY_HOSTNAME:-mail.example.com}

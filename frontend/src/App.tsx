@@ -145,7 +145,7 @@ export const App: React.FC = () => {
         currentUser={loginUser || 'Administrator'}
       />
 
-      <main style={{ display: 'flex', gap: '24px', padding: '24px', maxWidth: '1440px', width: '100%', margin: '0 auto', flex: 1 }}>
+      <main style={{ display: 'flex', gap: '24px', padding: '24px 32px', width: '100%', maxWidth: '100%', margin: '0', flex: 1, boxSizing: 'border-box' }}>
         <SidebarCard
           currentTab={currentTab}
           onSelectTab={setCurrentTab}

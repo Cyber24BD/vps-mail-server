@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Globe, Plus, RefreshCw, Trash2, Copy, Check } from 'lucide-react';
 import { api } from '../../services/api';
 import { StatusBadge } from '../common/StatusBadge';
 import { SkeletonCard } from '../common/SkeletonCard';
@@ -13,6 +13,7 @@ export const DomainsView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Add domain form
   const [newDomain, setNewDomain] = useState('');
@@ -95,6 +96,12 @@ export const DomainsView: React.FC = () => {
     }
   };
 
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   if (loading) {
     return <SkeletonCard lines={6} height="350px" />;
   }
@@ -164,14 +171,14 @@ export const DomainsView: React.FC = () => {
 
           {/* Right Detailed DNS Inspector */}
           {selectedDomain && (
-            <div className="card-standard" style={{ padding: '24px' }}>
+            <div className="card-standard" style={{ padding: '24px', overflow: 'hidden' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', paddingBottom: '16px', borderBottom: '1px solid #E5E7EB' }}>
                 <div>
                   <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#111827' }}>
                     {selectedDomain.name}
                   </h3>
-                  <p style={{ fontSize: '12.5px', color: '#6B7280' }}>
-                    Gateway Host: <code>{selectedDomain.mail_hostname}</code> | DKIM Selector: <code>{selectedDomain.dkim_selector}</code>
+                  <p style={{ fontSize: '12.5px', color: '#6B7280', marginTop: '3px' }}>
+                    Gateway Host: <code style={{ backgroundColor: '#F1F3F5', padding: '2px 6px', borderRadius: '4px' }}>{selectedDomain.mail_hostname}</code> | DKIM Selector: <code style={{ backgroundColor: '#F1F3F5', padding: '2px 6px', borderRadius: '4px' }}>{selectedDomain.dkim_selector}</code>
                   </p>
                 </div>
 
@@ -196,39 +203,121 @@ export const DomainsView: React.FC = () => {
               </div>
 
               {/* DNS Verification Grid Table */}
-              <div style={{ overflowX: 'auto' }}>
+              <div style={{ overflowX: 'auto', width: '100%' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#F8F9FA', borderBottom: '1.5px solid #E5E7EB' }}>
-                      <th style={{ padding: '10px 12px', fontWeight: 600, color: '#4B5563' }}>Type</th>
-                      <th style={{ padding: '10px 12px', fontWeight: 600, color: '#4B5563' }}>Host / Name</th>
-                      <th style={{ padding: '10px 12px', fontWeight: 600, color: '#4B5563' }}>Expected Value</th>
-                      <th style={{ padding: '10px 12px', fontWeight: 600, color: '#4B5563' }}>Detected Value</th>
-                      <th style={{ padding: '10px 12px', fontWeight: 600, color: '#4B5563' }}>Status</th>
+                      <th style={{ padding: '12px 14px', fontWeight: 600, color: '#4B5563', width: '70px', whiteSpace: 'nowrap' }}>Type</th>
+                      <th style={{ padding: '12px 14px', fontWeight: 600, color: '#4B5563', width: '220px', whiteSpace: 'nowrap' }}>Host / Name</th>
+                      <th style={{ padding: '12px 14px', fontWeight: 600, color: '#4B5563', minWidth: '320px' }}>Expected Value</th>
+                      <th style={{ padding: '12px 14px', fontWeight: 600, color: '#4B5563', minWidth: '220px' }}>Detected Value</th>
+                      <th style={{ padding: '12px 14px', fontWeight: 600, color: '#4B5563', width: '130px', whiteSpace: 'nowrap' }}>Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedDomain.dns_records?.map((record) => (
-                      <tr key={record.id} style={{ borderBottom: '1px solid #F1F3F5' }}>
-                        <td style={{ padding: '12px', fontWeight: 700 }}>
-                          <span style={{ padding: '2px 6px', backgroundColor: '#E5E7EB', borderRadius: '4px', fontSize: '11px' }}>
-                            {record.record_type}
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px', fontFamily: 'monospace', color: '#374151' }}>
-                          {record.host}
-                        </td>
-                        <td style={{ padding: '12px', fontFamily: 'monospace', maxWidth: '240px', wordBreak: 'break-all' }}>
-                          {record.expected_value}
-                        </td>
-                        <td style={{ padding: '12px', fontFamily: 'monospace', color: '#6B7280', maxWidth: '200px', wordBreak: 'break-all' }}>
-                          {record.detected_value || '—'}
-                        </td>
-                        <td style={{ padding: '12px' }}>
-                          <StatusBadge status={record.status} />
-                        </td>
-                      </tr>
-                    ))}
+                    {selectedDomain.dns_records?.map((record) => {
+                      const isExpectedCopied = copiedId === `exp-${record.id}`;
+                      const isHostCopied = copiedId === `host-${record.id}`;
+
+                      return (
+                        <tr key={record.id} style={{ borderBottom: '1px solid #F1F3F5' }}>
+                          {/* Type */}
+                          <td style={{ padding: '14px', fontWeight: 700, verticalAlign: 'top' }}>
+                            <span style={{ padding: '3px 8px', backgroundColor: '#E5E7EB', borderRadius: '5px', fontSize: '11px', fontWeight: 700 }}>
+                              {record.record_type}
+                            </span>
+                          </td>
+
+                          {/* Host */}
+                          <td style={{ padding: '14px', verticalAlign: 'top' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#111827', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                {record.host}
+                              </span>
+                              <button
+                                onClick={() => copyToClipboard(record.host, `host-${record.id}`)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  color: isHostCopied ? '#2B8A3E' : '#9CA3AF',
+                                  padding: '2px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                }}
+                                title="Copy Host"
+                              >
+                                {isHostCopied ? <Check size={13} strokeWidth={2.5} /> : <Copy size={13} />}
+                              </button>
+                            </div>
+                          </td>
+
+                          {/* Expected Value */}
+                          <td style={{ padding: '14px', verticalAlign: 'top' }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                              <div
+                                style={{
+                                  fontFamily: 'monospace',
+                                  fontSize: '12px',
+                                  backgroundColor: '#F8F9FA',
+                                  border: '1px solid #E5E7EB',
+                                  padding: '6px 10px',
+                                  borderRadius: '6px',
+                                  color: '#111827',
+                                  wordBreak: 'break-word',
+                                  maxHeight: '75px',
+                                  overflowY: 'auto',
+                                  flex: 1,
+                                  lineHeight: '1.4',
+                                }}
+                              >
+                                {record.expected_value}
+                              </div>
+                              <button
+                                onClick={() => copyToClipboard(record.expected_value, `exp-${record.id}`)}
+                                className="btn-secondary"
+                                style={{
+                                  padding: '4px 8px',
+                                  fontSize: '11px',
+                                  gap: '4px',
+                                  flexShrink: 0,
+                                  marginTop: '2px',
+                                  backgroundColor: isExpectedCopied ? '#EBFBEE' : '#FFFFFF',
+                                  borderColor: isExpectedCopied ? '#2B8A3E' : '#D1D5DB',
+                                  color: isExpectedCopied ? '#1B5E20' : '#374151',
+                                }}
+                                title="Copy value to clipboard"
+                              >
+                                {isExpectedCopied ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} />}
+                                <span>{isExpectedCopied ? 'Copied' : 'Copy'}</span>
+                              </button>
+                            </div>
+                          </td>
+
+                          {/* Detected Value */}
+                          <td style={{ padding: '14px', verticalAlign: 'top' }}>
+                            <div
+                              style={{
+                                fontFamily: 'monospace',
+                                fontSize: '12px',
+                                color: record.status === 'verified' ? '#2B8A3E' : '#6B7280',
+                                wordBreak: 'break-word',
+                                maxHeight: '75px',
+                                overflowY: 'auto',
+                                lineHeight: '1.4',
+                              }}
+                            >
+                              {record.detected_value || '—'}
+                            </div>
+                          </td>
+
+                          {/* Status */}
+                          <td style={{ padding: '14px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+                            <StatusBadge status={record.status} />
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

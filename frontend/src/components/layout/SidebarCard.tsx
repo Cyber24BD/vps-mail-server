@@ -55,12 +55,13 @@ export const SidebarCard: React.FC<SidebarCardProps> = ({
       className="card-standard"
       style={{
         width: '260px',
+        flexShrink: 0,
         borderRadius: '18px',
         padding: '16px 12px',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        minHeight: 'calc(100vh - 100px)',
+        minHeight: 'calc(100vh - 112px)',
         alignSelf: 'flex-start',
         position: 'sticky',
         top: '80px',

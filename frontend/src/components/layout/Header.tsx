@@ -18,16 +18,18 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header
       style={{
+        width: '100%',
         height: '64px',
         backgroundColor: '#FFFFFF',
         borderBottom: '1px solid #E5E7EB',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '0 24px',
+        padding: '0 32px',
         position: 'sticky',
         top: 0,
         zIndex: 100,
+        boxSizing: 'border-box',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

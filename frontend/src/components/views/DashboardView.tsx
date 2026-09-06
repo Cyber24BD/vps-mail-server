@@ -6,12 +6,16 @@ import {
   Cpu,
   HardDrive,
   RefreshCw,
+  GitPullRequest,
+  ArrowUpCircle
+
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { MetricCard } from '../common/MetricCard';
 import { SkeletonCard } from '../common/SkeletonCard';
 import { StatusBadge } from '../common/StatusBadge';
 import type { SystemHealthOverview, SystemResourceMetrics } from '../../types';
+
 
 
 export const DashboardView: React.FC = () => {
@@ -183,6 +187,52 @@ export const DashboardView: React.FC = () => {
           />
         </div>
       </div>
+
+      {/* 1-Click Zero-Downtime GitHub Updater Card */}
+      <div className="card-standard" style={{ padding: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <GitPullRequest size={18} />
+            <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#111827' }}>
+              1-Click Platform Updater (GitHub Sync)
+            </h3>
+          </div>
+          <StatusBadge status="verified" label="GitHub Tracking: main" />
+        </div>
+
+        <p style={{ fontSize: '13px', color: '#4B5563', marginBottom: '16px' }}>
+          Instantly pull newly committed features, security patches, and frontend updates from your repository. 
+          Your email data, SSL certificates, and database credentials remain completely isolated and intact.
+        </p>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8F9FA', padding: '14px 18px', borderRadius: '10px', border: '1px solid #E5E7EB' }}>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>
+              Repository: <code>Cyber24BD/vps-mail-server</code>
+            </div>
+            <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '2px' }}>
+              One-click upgrades execute safely in the background with pre-update SQL snapshots.
+            </div>
+          </div>
+
+          <button
+            className="btn-primary"
+            onClick={async () => {
+              if (!confirm('Are you sure you want to trigger a 1-click update? The system will create a safety backup, pull latest code from GitHub, and rebuild containers.')) return;
+              try {
+                const res = await api.applyUpdate();
+                alert(res.message || 'Update started in background.');
+              } catch (err: any) {
+                alert(err.message || 'Failed to trigger update');
+              }
+            }}
+          >
+            <ArrowUpCircle size={15} />
+            <span>1-Click Update Now</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
+

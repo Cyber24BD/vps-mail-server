@@ -10,7 +10,7 @@ Deploy this platform directly to an **Ubuntu 20.04 / 22.04 / 24.04 LTS** or **De
 
 ### 1. Clone & Run Installer
 ```bash
-git clone <your-repository-url> /var/mail-platform
+git clone https://github.com/Cyber24BD/vps-mail-server.git /var/mail-platform
 cd /var/mail-platform
 chmod +x install.sh
 sudo ./install.sh
@@ -18,16 +18,41 @@ sudo ./install.sh
 
 ### 2. What the Installer Does Automatically:
 1. **Validates Host Environment:** Checks OS compatibility, CPU cores, free RAM (recommended 2GB–4GB), and root storage.
-2. **Ports Audit:** Verifies availability of ports `25` (SMTP), `80` (HTTP), `443` (HTTPS), `587` (Submission), `993` (IMAPS), and `8080` (Bootstrap Control).
+2. **Ports Audit & Conflict Detection:** Checks ports `25` (SMTP), `80` (HTTP), `443` (HTTPS), `587` (Submission), `993` (IMAPS). Default Control Panel port is **`7080`** (dynamically shifts to `7081`, `7082` if occupied).
 3. **Installs Container Engine:** Installs Docker Engine & Docker Compose if not found.
 4. **Initializes Storage & Permissions:** Provisions `/var/mail-platform/vmail` and `/var/mail-platform/dkim` assigned to `vmail` (UID:GID 5000:5000).
 5. **Generates Cryptographic Secrets:** Creates `.env` with unique random passwords for PostgreSQL, Redis, Rspamd, and JWT secrets.
-6. **Generates Bootstrap SSL:** Creates self-signed certificates so the system is TLS-ready before Let's Encrypt domain activation.
-7. **Starts Microservices:** Boots all 10 containers via Docker Compose and runs database migrations.
-8. **Outputs Bootstrap URL:**
+6. **Synchronizes Mail Engine Credentials:** Automatically maps database credentials into Postfix and Dovecot SQL configurations.
+7. **Generates Bootstrap SSL:** Creates self-signed certificates so the system is TLS-ready before Let's Encrypt domain activation.
+8. **Starts Microservices:** Boots all 10 containers via Docker Compose and runs database migrations.
+9. **Outputs Bootstrap URL:**
    ```text
-   🌐 http://<YOUR_SERVER_IP>:8080
+   🌐 http://<YOUR_SERVER_IP>:7080
    ```
+
+---
+
+## 🔄 1-Click Zero-Data-Loss Updates
+
+When you push new features, security updates, or bug fixes to GitHub, you can upgrade your production VPS platform in **one click** without losing any email data, SSL certificates, or configuration secrets!
+
+### Option A: From the Admin Web Dashboard (1-Click UI)
+1. Navigate to **Control Center &rarr; System Overview**.
+2. Under the **"1-Click Platform Updater"** card, click **"1-Click Update Now"**.
+3. The platform executes the update in the background with an automated SQL snapshot!
+
+### Option B: From the VPS Terminal (1-Command CLI)
+```bash
+cd /var/mail-platform
+sudo ./update.sh
+```
+
+#### What the Updater Does:
+- **Pre-Update Safety Backup:** Dumps PostgreSQL database to `/var/mail-platform/backups/pre_update_<timestamp>.sql`.
+- **Git Sync:** Fetches and pulls the latest code from `origin/main`.
+- **Preserves Secrets:** Keeps `.env`, SSL certificates, DKIM keys, and Maildir storage strictly untouched.
+- **Microservices Rebuild:** Runs `docker compose up -d --build` with near-zero downtime.
+- **Health Verification:** Probes database and container health to verify operational integrity.
 
 ---
 
@@ -54,7 +79,7 @@ cd frontend
 # Install dependencies
 npm install
 
-# Start development server
+# Start development server (with automated /api proxy to backend)
 npm run dev
 
 # Compile production bundle
@@ -84,3 +109,4 @@ Developed strictly against [`design.md`](file:///d:/Development/Mail%20Syatem/de
 - **Storage Separation:** Application PostgreSQL database stores only structured metadata (domains, mailboxes, quotas, audit logs), while email bodies are stored in Maildir format under `/var/mail-platform/vmail/`.
 - **Live DNS Resolver:** Real-time query verification across **A**, **MX**, **SPF**, **DKIM**, **DMARC**, and **PTR (Reverse DNS)** records.
 - **Automated Security:** Integrates Postfix SASL with Dovecot, Rspamd milter filtering, ClamAV antivirus scanning, and Fail2ban brute-force protection.
+- **Feature Flags:** Modular toggles in `.env` (`ENABLE_WEBMAIL`, `ENABLE_CLAMAV`, `ENABLE_BACKUPS`, `ENABLE_ALIASES`, etc.) allow easily adding or disabling features.

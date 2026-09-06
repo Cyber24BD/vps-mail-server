@@ -197,6 +197,16 @@ class ApiClient {
       body: JSON.stringify({ recipient, subject, body }),
     });
   }
+
+  // --- Platform Updates ---
+  async checkUpdates() {
+    return this.request<any>('/updates/check');
+  }
+
+  async applyUpdate() {
+    return this.request<any>('/updates/apply', { method: 'POST' });
+  }
 }
+
 
 export const api = new ApiClient();

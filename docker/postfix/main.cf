@@ -1,0 +1,70 @@
+# Postfix main.cf for Corporate Mail Platform
+smtpd_banner = $myhostname ESMTP Corporate Mail Gateway
+biff = no
+append_dot_mydomain = no
+readme_directory = no
+
+# TLS parameters
+smtpd_tls_cert_file = /etc/ssl/certs/corpmail/fullchain.pem
+smtpd_tls_key_file = /etc/ssl/certs/corpmail/privkey.pem
+smtpd_tls_security_level = may
+smtpd_tls_protocols = !SSLv2, !SSLv3, !TLSv1, !TLSv1.1
+smtpd_tls_mandatory_protocols = !SSLv2, !SSLv3, !TLSv1, !TLSv1.1
+smtpd_tls_mandatory_ciphers = medium
+smtpd_tls_auth_only = yes
+smtp_tls_security_level = may
+smtp_tls_loglevel = 1
+
+# Network & Host configuration
+myhostname = mail.example.com
+mydomain = example.com
+myorigin = $mydomain
+mydestination = localhost
+relayhost = 
+mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
+mailbox_size_limit = 0
+recipient_delimiter = +
+inet_interfaces = all
+inet_protocols = all
+
+# SASL Authentication via Dovecot LMTP / Auth
+smtpd_sasl_type = dovecot
+smtpd_sasl_path = inet:dovecot:12345
+smtpd_sasl_auth_enable = yes
+smtpd_sasl_security_options = noanonymous
+broken_sasl_auth_clients = yes
+
+# Mail Delivery Agent: Dovecot LMTP
+virtual_transport = lmtp:inet:dovecot:24
+
+# Virtual Mailbox & Alias PostgreSQL Lookups
+virtual_mailbox_domains = pgsql:/etc/postfix/sql/pgsql-virtual-mailbox-domains.cf
+virtual_mailbox_maps = pgsql:/etc/postfix/sql/pgsql-virtual-mailbox-maps.cf
+virtual_alias_maps = pgsql:/etc/postfix/sql/pgsql-virtual-alias-maps.cf
+
+# Security & Restriction Rules
+smtpd_helo_required = yes
+smtpd_helo_restrictions =
+    permit_mynetworks,
+    permit_sasl_authenticated,
+    reject_invalid_helo_hostname,
+    reject_non_fqdn_helo_hostname
+
+smtpd_sender_restrictions =
+    permit_mynetworks,
+    permit_sasl_authenticated,
+    reject_non_fqdn_sender,
+    reject_unknown_sender_domain
+
+smtpd_recipient_restrictions =
+    permit_mynetworks,
+    permit_sasl_authenticated,
+    reject_unauth_destination,
+    reject_non_fqdn_recipient,
+    reject_unknown_recipient_domain
+
+# Milter Integration (Rspamd for DKIM signing and Spam filtering)
+smtpd_milters = inet:rspamd:11332
+non_smtpd_milters = inet:rspamd:11332
+milter_default_action = accept
+milter_protocol = 6

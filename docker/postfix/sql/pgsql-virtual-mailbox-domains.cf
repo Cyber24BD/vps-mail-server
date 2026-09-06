@@ -1,0 +1,5 @@
+hosts = postgres:5432
+user = mailuser
+password = supersecurepassword123
+dbname = corpmail
+query = SELECT name FROM domains WHERE name='%s' AND is_active=true

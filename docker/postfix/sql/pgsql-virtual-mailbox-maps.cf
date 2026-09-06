@@ -1,0 +1,5 @@
+hosts = postgres:5432
+user = mailuser
+password = supersecurepassword123
+dbname = corpmail
+query = SELECT maildir FROM mailboxes WHERE email='%s' AND is_active=true

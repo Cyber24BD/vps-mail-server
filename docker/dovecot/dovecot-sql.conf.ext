@@ -1,0 +1,23 @@
+# Dovecot PostgreSQL Authentication & Mailbox Mapping
+driver = pgsql
+connect = host=postgres dbname=corpmail user=mailuser password=supersecurepassword123
+
+# Default password scheme
+default_pass_scheme = BLF-CRYPT
+
+# Password query for IMAP authentication
+password_query = \
+  SELECT email as user, password_hash as password \
+  FROM mailboxes \
+  WHERE email = '%u' AND is_active = true
+
+# User query for storage location and quota
+user_query = \
+  SELECT '/var/mail-platform/vmail/' || maildir as home, \
+         5000 as uid, 5000 as gid, \
+         '*:bytes=' || quota_bytes as quota_rule \
+  FROM mailboxes \
+  WHERE email = '%u' AND is_active = true
+
+# Iterate query for Dovecot doveadm operations
+iterate_query = SELECT email AS user FROM mailboxes WHERE is_active = true

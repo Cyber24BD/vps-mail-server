@@ -1,0 +1,235 @@
+/* ==========================================================================
+   Design System Tokens & Utilities per design.md
+   Color Theme: Gray to Black base, Light themed workspace with Accent Dark Cards
+   Semantic: Light Tint BG + Thin Deep Border + Deep Text
+   ========================================================================== */
+
+:root {
+  /* Surfaces */
+  --surface-canvas: #F8F9FA;
+  --surface-card: #FFFFFF;
+  --surface-subtle: #F1F3F5;
+  --surface-hover: #E9ECEF;
+  --surface-contrast: #111315;
+
+  /* Typography Colors */
+  --text-primary: #111827;
+  --text-secondary: #4B5563;
+  --text-muted: #6B7280;
+  --text-on-dark: #F9FAFB;
+
+  /* Borders (Low/No Shadow, Crisp Thin Borders) */
+  --border-subtle: #E5E7EB;
+  --border-deep: #2D3139;
+  --border-focus: #111827;
+  --border-dark-card: #374151;
+
+  /* Semantic - Success (Good Increase / Verified) */
+  --status-success-bg: #EBFBEE;
+  --status-success-border: #2B8A3E;
+  --status-success-text: #1B5E20;
+  --gradient-success: linear-gradient(135deg, #2B8A3E 0%, #40C057 100%);
+
+  /* Semantic - Warning (Action Needed / Pending) */
+  --status-warning-bg: #FFF9DB;
+  --status-warning-border: #E67700;
+  --status-warning-text: #A65D03;
+
+  /* Semantic - Danger (Degraded / Failed / Bad) */
+  --status-danger-bg: #FFF5F5;
+  --status-danger-border: #C92A2A;
+  --status-danger-text: #961C1C;
+  --gradient-danger: linear-gradient(135deg, #C92A2A 0%, #FA5252 100%);
+
+  /* Semantic - Info */
+  --status-info-bg: #E7F5FF;
+  --status-info-border: #1971C2;
+  --status-info-text: #114E87;
+
+  /* Border Radiuses (Strictly 5px to 20px) */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+
+  /* Elevation: Strictly zero or minimal */
+  --shadow-none: none;
+  --shadow-subtle: 0 2px 8px rgba(0, 0, 0, 0.03);
+  --shadow-overlay: 0 4px 16px rgba(0, 0, 0, 0.06);
+
+  /* Transitions */
+  --transition-fast: 150ms ease-out;
+  --transition-normal: 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Base resets */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: var(--surface-canvas);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Shimmer Animation for Blank Card / Skeleton Loaders */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #F1F3F5 25%, #E9ECEF 50%, #F1F3F5 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite linear;
+  border-radius: var(--radius-sm);
+}
+
+/* Page Entrance Animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeInUp 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Pulse Animation for Live Service Synchronization */
+@keyframes pulseRing {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(43, 138, 62, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(43, 138, 62, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(43, 138, 62, 0); }
+}
+
+.pulse-dot-active {
+  width: 8px;
+  height: 8px;
+  background-color: var(--status-success-border);
+  border-radius: 50%;
+  animation: pulseRing 2s infinite;
+}
+
+/* Card Styles */
+.card-standard {
+  background-color: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  transition: border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.card-standard:hover {
+  border-color: var(--border-deep);
+}
+
+.card-dark-accent {
+  background-color: var(--surface-contrast);
+  color: var(--text-on-dark);
+  border: 1px solid var(--border-dark-card);
+  border-radius: var(--radius-lg);
+}
+
+/* Status Badges */
+.badge-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  line-height: 1.2;
+}
+
+.badge-success {
+  background-color: var(--status-success-bg);
+  border: 1px solid var(--status-success-border);
+  color: var(--status-success-text);
+}
+
+.badge-warning {
+  background-color: var(--status-warning-bg);
+  border: 1px solid var(--status-warning-border);
+  color: var(--status-warning-text);
+}
+
+.badge-danger {
+  background-color: var(--status-danger-bg);
+  border: 1px solid var(--status-danger-border);
+  color: var(--status-danger-text);
+}
+
+.badge-info {
+  background-color: var(--status-info-bg);
+  border: 1px solid var(--status-info-border);
+  color: var(--status-info-text);
+}
+
+/* Buttons */
+.btn-primary {
+  background-color: var(--text-primary);
+  color: #FFFFFF;
+  border: 1px solid var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.btn-primary:hover {
+  background-color: var(--border-deep);
+  border-color: var(--border-deep);
+}
+
+.btn-secondary {
+  background-color: var(--surface-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-deep);
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color var(--transition-fast);
+}
+
+.btn-secondary:hover {
+  background-color: var(--surface-subtle);
+}
+
+/* Form Controls */
+.input-control {
+  width: 100%;
+  height: 40px;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--text-primary);
+  background-color: #FFFFFF;
+  border: 1px solid #D1D5DB;
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.input-control:focus {
+  border-color: var(--border-focus);
+}

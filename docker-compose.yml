@@ -1,0 +1,188 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: corpmail-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mailuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-supersecurepassword123}
+      POSTGRES_DB: ${POSTGRES_DB:-corpmail}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mailuser} -d ${POSTGRES_DB:-corpmail}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - corpmail-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: corpmail-redis
+    restart: always
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-supersecureredispassword123}"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-supersecureredispassword123}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - corpmail-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: corpmail-backend
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_SERVER=postgres
+      - REDIS_HOST=redis
+    volumes:
+      - vmail_data:/var/mail-platform/vmail
+      - dkim_data:/var/mail-platform/dkim
+      - ssl_data:/var/mail-platform/ssl
+      - backup_data:/var/mail-platform/backups
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - corpmail-net
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: corpmail-worker
+    restart: always
+    command: ["python", "-m", "app.workers.scheduler"]
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_SERVER=postgres
+      - REDIS_HOST=redis
+    volumes:
+      - vmail_data:/var/mail-platform/vmail
+      - dkim_data:/var/mail-platform/dkim
+      - ssl_data:/var/mail-platform/ssl
+      - backup_data:/var/mail-platform/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - corpmail-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: corpmail-frontend
+    restart: always
+    networks:
+      - corpmail-net
+
+  postfix:
+    image: bokom/postfix:latest
+    container_name: corpmail-postfix
+    restart: always
+    hostname: ${PRIMARY_HOSTNAME:-mail.example.com}
+    ports:
+      - "25:25"
+      - "465:465"
+      - "587:587"
+    volumes:
+      - ./docker/postfix/main.cf:/etc/postfix/main.cf:ro
+      - ./docker/postfix/master.cf:/etc/postfix/master.cf:ro
+      - ./docker/postfix/sql:/etc/postfix/sql:ro
+      - vmail_data:/var/mail-platform/vmail
+      - ssl_data:/etc/ssl/certs/corpmail:ro
+      - dkim_data:/etc/dkim:ro
+    depends_on:
+      - postgres
+      - dovecot
+    networks:
+      - corpmail-net
+
+  dovecot:
+    image: dovecot/dovecot:latest
+    container_name: corpmail-dovecot
+    restart: always
+    hostname: ${PRIMARY_HOSTNAME:-mail.example.com}
+    ports:
+      - "143:143"
+      - "993:993"
+    volumes:
+      - ./docker/dovecot/dovecot.conf:/etc/dovecot/dovecot.conf:ro
+      - ./docker/dovecot/conf.d:/etc/dovecot/conf.d:ro
+      - ./docker/dovecot/dovecot-sql.conf.ext:/etc/dovecot/dovecot-sql.conf.ext:ro
+      - vmail_data:/var/mail-platform/vmail
+      - ssl_data:/etc/ssl/certs/corpmail:ro
+    depends_on:
+      - postgres
+    networks:
+      - corpmail-net
+
+  rspamd:
+    image: rspamd/rspamd:latest
+    container_name: corpmail-rspamd
+    restart: always
+    ports:
+      - "11334:11334"
+    volumes:
+      - ./docker/rspamd/local.d:/etc/rspamd/local.d:ro
+      - dkim_data:/var/lib/rspamd/dkim:ro
+      - redis_data:/var/lib/redis
+    depends_on:
+      - redis
+    networks:
+      - corpmail-net
+
+  clamav:
+    image: clamav/clamav:latest
+    container_name: corpmail-clamav
+    restart: always
+    networks:
+      - corpmail-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: corpmail-nginx
+    restart: always
+    ports:
+      - "${CONTROL_PORT:-7080}:7080"
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ssl_data:/etc/letsencrypt:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - corpmail-net
+
+volumes:
+  postgres_data:
+  redis_data:
+  vmail_data:
+  dkim_data:
+  ssl_data:
+  backup_data:
+
+networks:
+  corpmail-net:
+    driver: bridge

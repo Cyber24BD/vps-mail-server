@@ -103,6 +103,8 @@ until docker compose exec -T postgres pg_isready -U mailuser -d corpmail &> /dev
 done
 
 NEW_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+CHOSEN_CONTROL_PORT=$(grep '^CONTROL_PORT=' .env | cut -d '=' -f2 || echo "7080")
+SERVER_IP=$(grep '^SERVER_IP=' .env | cut -d '=' -f2 || curl -s https://api.ipify.org 2>/dev/null || echo "YOUR_VPS_IP")
 
 echo ""
 echo -e "${GREEN}==============================================================================${NC}"
@@ -110,4 +112,8 @@ echo -e "${GREEN}  Corporate Mail Platform Updated Successfully!${NC}"
 echo -e "${GREEN}  Active Version: ${NEW_COMMIT}${NC}"
 echo -e "${GREEN}  Pre-Update Safety Backup: ${SNAPSHOT_FILE}${NC}"
 echo -e "${GREEN}  All Mailboxes, SSL Certificates, and Passwords Safely Preserved.${NC}"
+echo -e "${GREEN}==============================================================================${NC}"
+echo ""
+echo -e "${CYAN}📌 Access URLs:${NC}"
+echo -e "  • Control Panel & Webmail: ${YELLOW}http://${SERVER_IP}:${CHOSEN_CONTROL_PORT}${NC} (or http://${SERVER_IP})"
 echo -e "${GREEN}==============================================================================${NC}"

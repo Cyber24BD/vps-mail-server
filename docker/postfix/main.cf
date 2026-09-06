@@ -4,6 +4,9 @@ biff = no
 append_dot_mydomain = no
 readme_directory = no
 
+# Direct log output to stdout for docker log collectors
+maillog_file = /dev/stdout
+
 # TLS parameters
 smtpd_tls_cert_file = /etc/ssl/certs/corpmail/fullchain.pem
 smtpd_tls_key_file = /etc/ssl/certs/corpmail/privkey.pem
@@ -16,8 +19,8 @@ smtp_tls_security_level = may
 smtp_tls_loglevel = 1
 
 # Network & Host configuration
-myhostname = mail.example.com
-mydomain = example.com
+myhostname = mail.toamun.com
+mydomain = toamun.com
 myorigin = $mydomain
 mydestination = localhost
 relayhost = 
@@ -68,3 +71,6 @@ smtpd_milters = inet:rspamd:11332
 non_smtpd_milters = inet:rspamd:11332
 milter_default_action = accept
 milter_protocol = 6
+milter_connect_timeout = 5s
+milter_command_timeout = 5s
+milter_content_timeout = 10s

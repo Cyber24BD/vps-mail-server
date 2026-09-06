@@ -143,6 +143,7 @@ services:
     restart: always
     ports:
       - "11334:11334"
+      - "11332:11332"
     volumes:
       - ./docker/rspamd/local.d:/etc/rspamd/local.d:ro
       - ${DKIM_DIR:-/var/mail-platform/dkim}:/var/lib/rspamd/dkim:ro

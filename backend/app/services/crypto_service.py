@@ -52,7 +52,7 @@ class CryptoService:
         with open(key_path, "w", encoding="utf-8") as f:
             f.write(private_pem)
         try:
-            os.chmod(key_path, 0o600)
+            os.chmod(key_path, 0o644)
         except Exception:
             pass
         return key_path

@@ -22,7 +22,8 @@ init_storage_and_permissions() {
 
   chown -R 5000:5000 /var/mail-platform/vmail
   chmod -R 770 /var/mail-platform/vmail
-  chmod 700 /var/mail-platform/dkim
+  chmod 755 /var/mail-platform/dkim
+  chmod 755 /var/mail-platform/ssl
   log_success "Storage directories configured with vmail (UID:GID 5000)."
 }
 
@@ -33,7 +34,8 @@ init_bootstrap_ssl() {
       -keyout /var/mail-platform/ssl/privkey.pem \
       -out /var/mail-platform/ssl/fullchain.pem \
       -subj "/C=US/ST=State/L=City/O=CorporateMail/OU=IT/CN=${PUBLIC_IP}" > /dev/null 2>&1
-    chmod 600 /var/mail-platform/ssl/privkey.pem
+    chmod 644 /var/mail-platform/ssl/privkey.pem
+    chmod 644 /var/mail-platform/ssl/fullchain.pem
     log_success "Temporary self-signed certificate generated for bootstrap mode."
   else
     log_success "Existing SSL certificate detected."

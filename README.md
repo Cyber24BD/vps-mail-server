@@ -52,7 +52,78 @@ sudo ./update.sh
 - **Git Sync:** Fetches and pulls the latest code from `origin/main`.
 - **Preserves Secrets:** Keeps `.env`, SSL certificates, DKIM keys, and Maildir storage strictly untouched.
 - **Microservices Rebuild:** Runs `docker compose up -d --build` with near-zero downtime.
+- **Flushes Stale DNS Cache:** Automatically restarts Nginx to ensure it connects to updated container network IPs.
 - **Health Verification:** Probes database and container health to verify operational integrity.
+
+---
+
+## 🔒 Automated SSL/TLS Certificate Management (Let's Encrypt)
+
+The platform comes with a 1-click script to issue official, trusted Let's Encrypt certificates using an automated ACME HTTP-01 challenge over Port 80 via Dockerized Certbot.
+
+### 1. Issue Trusted SSL for your Mail Domain
+Run directly from your VPS terminal:
+```bash
+cd /var/mail-platform
+sudo ./scripts/issue_ssl.sh mail.yourdomain.com admin@yourdomain.com
+```
+
+#### What `issue_ssl.sh` does automatically:
+1. Spawns an isolated `certbot/certbot` container using ACME webroot challenge.
+2. Validates your domain against Nginx on Port 80.
+3. Automatically deploys `fullchain.pem` and `privkey.pem` to `/var/mail-platform/ssl/`.
+4. Hot-reloads **Nginx** (Webmail / Admin HTTPS), **Postfix** (SMTP Port 465/587), and **Dovecot** (IMAP Port 993) with zero downtime.
+
+### 2. Automated Monthly SSL Renewals (Cron)
+To automatically renew certificates every month, add a simple cron job:
+```bash
+# Open root crontab
+sudo crontab -e
+
+# Add monthly auto-renewal at 3:00 AM on the 1st of every month:
+0 3 1 * * /var/mail-platform/scripts/issue_ssl.sh mail.yourdomain.com admin@yourdomain.com >> /var/log/ssl_renew.log 2>&1
+```
+
+---
+
+## 🌐 Cloudflare & DNS Manager Automation
+
+The platform includes a built-in **RFC-1035 / BIND Zone Export** tool to configure Cloudflare or any DNS registrar without manual typing.
+
+### 1-Click Cloudflare DNS Import:
+1. In the Admin Panel, select your domain under **Domains & DNS**.
+2. Click the **"Export Cloudflare DNS (.txt)"** button.
+3. Download the generated `.txt` file.
+4. In your Cloudflare Dashboard: **Your Domain &rarr; DNS &rarr; Records &rarr; Import and Export &rarr; Import**.
+5. Upload the `.txt` file. Cloudflare will automatically configure your **A**, **MX**, **SPF**, **DKIM**, and **DMARC** records!
+
+> [!IMPORTANT]
+> **Cloudflare Grey Cloud Rule:** Mail-related A-records (e.g. `mail.yourdomain.com`) **must be DNS Only (Grey Cloud)**, never Proxied (Orange Cloud). Cloudflare's HTTP proxy will block standard mail ports (25, 465, 587, 993). The export script automatically enforces `cf_tags=cf-proxied:false`.
+
+### Reverse DNS (PTR) Requirement:
+- Forward DNS (`mail.yourdomain.com` &rarr; IP) is set in Cloudflare.
+- **Reverse DNS (PTR)** (IP &rarr; `mail.yourdomain.com`) **must be configured in your VPS hosting provider's dashboard** (where you purchased the server), because Cloudflare does not own your VPS's IP block.
+
+---
+
+## 🛠️ Super Administrator CLI & Disaster Recovery
+
+Manage administrator accounts directly from the terminal without opening the web interface:
+
+### 1. List All Active Administrators
+```bash
+docker compose exec backend python -m app.cli list-admins
+```
+
+### 2. Reset Administrator Password
+```bash
+docker compose exec backend python -m app.cli reset-password admin "YourNewStrongPassword123"
+```
+
+### 3. Create a Brand New Administrator
+```bash
+docker compose exec backend python -m app.cli create-admin admin admin@yourdomain.com "YourSecurePassword123"
+```
 
 ---
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, Plus, RefreshCw, Trash2, Copy, Check } from 'lucide-react';
+import { Globe, Plus, RefreshCw, Trash2, Copy, Check, Info } from 'lucide-react';
 import { api } from '../../services/api';
 import { StatusBadge } from '../common/StatusBadge';
 import { SkeletonCard } from '../common/SkeletonCard';
@@ -202,14 +202,42 @@ export const DomainsView: React.FC = () => {
                 </div>
               </div>
 
+              {/* DNS Registrar Quick Cheat-Sheet Banner */}
+              <div
+                style={{
+                  backgroundColor: '#F8F9FA',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '10px',
+                  padding: '12px 16px',
+                  marginBottom: '16px',
+                  fontSize: '12.5px',
+                  color: '#374151',
+                  lineHeight: '1.5',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, color: '#111827', marginBottom: '4px' }}>
+                  <Info size={15} color="#111827" />
+                  <span>Cloudflare & DNS Manager Guide:</span>
+                </div>
+                <div>
+                  • <strong>MX Record:</strong> Set <em>Name</em> to <code>@</code> (or your domain), <em>Mail Server</em> to <code>{selectedDomain.mail_hostname}</code>, and <em>Priority</em> to <code>10</code>.
+                </div>
+                <div>
+                  • <strong>Cloudflare Proxy Warning:</strong> All mail-related records (especially the <code>mail</code> A-record) <strong>must be DNS Only (Grey Cloud)</strong>, not Proxied (Orange Cloud).
+                </div>
+                <div>
+                  • <strong>PTR (Reverse DNS):</strong> Cannot be set in Cloudflare/registrar — configure it in your <strong>VPS hosting dashboard</strong>.
+                </div>
+              </div>
+
               {/* DNS Verification Grid Table */}
               <div style={{ overflowX: 'auto', width: '100%' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#F8F9FA', borderBottom: '1.5px solid #E5E7EB' }}>
-                      <th style={{ padding: '12px 14px', fontWeight: 600, color: '#4B5563', width: '70px', whiteSpace: 'nowrap' }}>Type</th>
-                      <th style={{ padding: '12px 14px', fontWeight: 600, color: '#4B5563', width: '220px', whiteSpace: 'nowrap' }}>Host / Name</th>
-                      <th style={{ padding: '12px 14px', fontWeight: 600, color: '#4B5563', minWidth: '320px' }}>Expected Value</th>
+                      <th style={{ padding: '12px 14px', fontWeight: 600, color: '#4B5563', width: '75px', whiteSpace: 'nowrap' }}>Type</th>
+                      <th style={{ padding: '12px 14px', fontWeight: 600, color: '#4B5563', width: '240px', whiteSpace: 'nowrap' }}>DNS Name / Host</th>
+                      <th style={{ padding: '12px 14px', fontWeight: 600, color: '#4B5563', minWidth: '340px' }}>Target / Expected Value</th>
                       <th style={{ padding: '12px 14px', fontWeight: 600, color: '#4B5563', minWidth: '220px' }}>Detected Value</th>
                       <th style={{ padding: '12px 14px', fontWeight: 600, color: '#4B5563', width: '130px', whiteSpace: 'nowrap' }}>Status</th>
                     </tr>
@@ -218,6 +246,29 @@ export const DomainsView: React.FC = () => {
                     {selectedDomain.dns_records?.map((record) => {
                       const isExpectedCopied = copiedId === `exp-${record.id}`;
                       const isHostCopied = copiedId === `host-${record.id}`;
+                      const isShortHostCopied = copiedId === `short-${record.id}`;
+
+                      // Calculate short name for Cloudflare (e.g. '@', 'mail', 'mail._domainkey')
+                      let shortHost = '@';
+                      if (record.host === selectedDomain.name) {
+                        shortHost = '@';
+                      } else if (record.host.endsWith(`.${selectedDomain.name}`)) {
+                        shortHost = record.host.slice(0, -(selectedDomain.name.length + 1));
+                      } else {
+                        shortHost = record.host;
+                      }
+
+                      // Check if record is MX to separate Priority and Server
+                      const isMx = record.record_type === 'MX';
+                      let mxPriority = '10';
+                      let mxServer = record.expected_value;
+                      if (isMx && record.expected_value.includes(' ')) {
+                        const parts = record.expected_value.trim().split(/\s+/);
+                        mxPriority = parts[0];
+                        mxServer = parts.slice(1).join(' ');
+                      }
+                      const isMxServerCopied = copiedId === `mx-srv-${record.id}`;
+                      const isMxPriorityCopied = copiedId === `mx-pri-${record.id}`;
 
                       return (
                         <tr key={record.id} style={{ borderBottom: '1px solid #F1F3F5' }}>
@@ -228,70 +279,150 @@ export const DomainsView: React.FC = () => {
                             </span>
                           </td>
 
-                          {/* Host */}
+                          {/* Host / Name */}
                           <td style={{ padding: '14px', verticalAlign: 'top' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#111827', fontSize: '13px', whiteSpace: 'nowrap' }}>
-                                {record.host}
-                              </span>
-                              <button
-                                onClick={() => copyToClipboard(record.host, `host-${record.id}`)}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  color: isHostCopied ? '#2B8A3E' : '#9CA3AF',
-                                  padding: '2px',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                }}
-                                title="Copy Host"
-                              >
-                                {isHostCopied ? <Check size={13} strokeWidth={2.5} /> : <Copy size={13} />}
-                              </button>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {/* Short Name for DNS providers */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ fontSize: '11px', color: '#6B7280', fontWeight: 600 }}>DNS Name:</span>
+                                <code style={{ backgroundColor: '#F1F3F5', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 700, color: '#111827' }}>
+                                  {shortHost}
+                                </code>
+                                <button
+                                  onClick={() => copyToClipboard(shortHost, `short-${record.id}`)}
+                                  style={{
+                                    background: 'none',
+                                    border: '1px solid #E5E7EB',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    color: isShortHostCopied ? '#2B8A3E' : '#4B5563',
+                                    padding: '2px 5px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px',
+                                    fontSize: '10px',
+                                  }}
+                                  title="Copy DNS Name for Cloudflare/Registrar"
+                                >
+                                  {isShortHostCopied ? <Check size={11} strokeWidth={2.5} /> : <Copy size={11} />}
+                                  <span>{isShortHostCopied ? 'Copied' : 'Copy'}</span>
+                                </button>
+                              </div>
+
+                              {/* Full FQDN */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#6B7280' }}>
+                                <span style={{ fontFamily: 'monospace' }}>{record.host}</span>
+                                <button
+                                  onClick={() => copyToClipboard(record.host, `host-${record.id}`)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    color: isHostCopied ? '#2B8A3E' : '#9CA3AF',
+                                    padding: '2px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                  }}
+                                  title="Copy Full FQDN"
+                                >
+                                  {isHostCopied ? <Check size={11} strokeWidth={2.5} /> : <Copy size={11} />}
+                                </button>
+                              </div>
                             </div>
                           </td>
 
                           {/* Expected Value */}
                           <td style={{ padding: '14px', verticalAlign: 'top' }}>
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                              <div
-                                style={{
-                                  fontFamily: 'monospace',
-                                  fontSize: '12px',
-                                  backgroundColor: '#F8F9FA',
-                                  border: '1px solid #E5E7EB',
-                                  padding: '6px 10px',
-                                  borderRadius: '6px',
-                                  color: '#111827',
-                                  wordBreak: 'break-word',
-                                  maxHeight: '75px',
-                                  overflowY: 'auto',
-                                  flex: 1,
-                                  lineHeight: '1.4',
-                                }}
-                              >
-                                {record.expected_value}
+                            {isMx ? (
+                              /* Specialized MX Field Representation with Individual Copy Buttons */
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#374151', minWidth: '80px' }}>Mail Server:</span>
+                                  <code style={{ fontFamily: 'monospace', fontSize: '12px', backgroundColor: '#F8F9FA', border: '1px solid #E5E7EB', padding: '4px 8px', borderRadius: '4px', color: '#111827' }}>
+                                    {mxServer}
+                                  </code>
+                                  <button
+                                    onClick={() => copyToClipboard(mxServer, `mx-srv-${record.id}`)}
+                                    className="btn-secondary"
+                                    style={{
+                                      padding: '3px 8px',
+                                      fontSize: '11px',
+                                      gap: '4px',
+                                      backgroundColor: isMxServerCopied ? '#EBFBEE' : '#FFFFFF',
+                                      borderColor: isMxServerCopied ? '#2B8A3E' : '#D1D5DB',
+                                      color: isMxServerCopied ? '#1B5E20' : '#374151',
+                                    }}
+                                    title="Copy Mail Server"
+                                  >
+                                    {isMxServerCopied ? <Check size={11} strokeWidth={2.5} /> : <Copy size={11} />}
+                                    <span>{isMxServerCopied ? 'Copied' : 'Copy Server'}</span>
+                                  </button>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#374151', minWidth: '80px' }}>Priority:</span>
+                                  <code style={{ fontFamily: 'monospace', fontSize: '12px', backgroundColor: '#F8F9FA', border: '1px solid #E5E7EB', padding: '4px 8px', borderRadius: '4px', color: '#111827' }}>
+                                    {mxPriority}
+                                  </code>
+                                  <button
+                                    onClick={() => copyToClipboard(mxPriority, `mx-pri-${record.id}`)}
+                                    className="btn-secondary"
+                                    style={{
+                                      padding: '3px 8px',
+                                      fontSize: '11px',
+                                      gap: '4px',
+                                      backgroundColor: isMxPriorityCopied ? '#EBFBEE' : '#FFFFFF',
+                                      borderColor: isMxPriorityCopied ? '#2B8A3E' : '#D1D5DB',
+                                      color: isMxPriorityCopied ? '#1B5E20' : '#374151',
+                                    }}
+                                    title="Copy Priority"
+                                  >
+                                    {isMxPriorityCopied ? <Check size={11} strokeWidth={2.5} /> : <Copy size={11} />}
+                                    <span>{isMxPriorityCopied ? 'Copied' : 'Copy Priority'}</span>
+                                  </button>
+                                </div>
                               </div>
-                              <button
-                                onClick={() => copyToClipboard(record.expected_value, `exp-${record.id}`)}
-                                className="btn-secondary"
-                                style={{
-                                  padding: '4px 8px',
-                                  fontSize: '11px',
-                                  gap: '4px',
-                                  flexShrink: 0,
-                                  marginTop: '2px',
-                                  backgroundColor: isExpectedCopied ? '#EBFBEE' : '#FFFFFF',
-                                  borderColor: isExpectedCopied ? '#2B8A3E' : '#D1D5DB',
-                                  color: isExpectedCopied ? '#1B5E20' : '#374151',
-                                }}
-                                title="Copy value to clipboard"
-                              >
-                                {isExpectedCopied ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} />}
-                                <span>{isExpectedCopied ? 'Copied' : 'Copy'}</span>
-                              </button>
-                            </div>
+                            ) : (
+                              /* Standard Record Value with Copy Button */
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                <div
+                                  style={{
+                                    fontFamily: 'monospace',
+                                    fontSize: '12px',
+                                    backgroundColor: '#F8F9FA',
+                                    border: '1px solid #E5E7EB',
+                                    padding: '6px 10px',
+                                    borderRadius: '6px',
+                                    color: '#111827',
+                                    wordBreak: 'break-word',
+                                    maxHeight: '75px',
+                                    overflowY: 'auto',
+                                    flex: 1,
+                                    lineHeight: '1.4',
+                                  }}
+                                >
+                                  {record.expected_value}
+                                </div>
+                                <button
+                                  onClick={() => copyToClipboard(record.expected_value, `exp-${record.id}`)}
+                                  className="btn-secondary"
+                                  style={{
+                                    padding: '4px 8px',
+                                    fontSize: '11px',
+                                    gap: '4px',
+                                    flexShrink: 0,
+                                    marginTop: '2px',
+                                    backgroundColor: isExpectedCopied ? '#EBFBEE' : '#FFFFFF',
+                                    borderColor: isExpectedCopied ? '#2B8A3E' : '#D1D5DB',
+                                    color: isExpectedCopied ? '#1B5E20' : '#374151',
+                                  }}
+                                  title="Copy value to clipboard"
+                                >
+                                  {isExpectedCopied ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} />}
+                                  <span>{isExpectedCopied ? 'Copied' : 'Copy Value'}</span>
+                                </button>
+                              </div>
+                            )}
                           </td>
 
                           {/* Detected Value */}

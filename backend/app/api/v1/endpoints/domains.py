@@ -139,7 +139,7 @@ async def verify_domain_dns(
             error=r["error_reason"]
         )
         updated_records.append(record)
-        if r["status"] not in ("verified", "warning"):
+        if r["record_type"] != "PTR" and r["status"] not in ("verified", "warning"):
             all_verified = False
 
     overall_status = "active" if all_verified else "action_required"

@@ -30,7 +30,7 @@ async def run_periodic_dns_checks():
                             expected_dkim_pub=domain.dkim_public_key or "",
                             vps_ip=settings.SERVER_IP
                         )
-                        all_verified = all(r["status"] in ("verified", "warning") for r in results)
+                        all_verified = all(r["status"] in ("verified", "warning") for r in results if r["record_type"] != "PTR")
                         for r in results:
                             await domain_repo.upsert_dns_record(
                                 domain_id=domain.id,

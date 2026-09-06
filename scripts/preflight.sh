@@ -92,6 +92,14 @@ check_mail_ports() {
         log_hint "A default MTA is running. Disable it with: 'sudo systemctl stop $proc_name && sudo systemctl disable $proc_name'"
       elif [[ "$proc_name" =~ (nginx|apache2|httpd) ]]; then
         log_hint "A web server is running on port $port. Free it with: 'sudo systemctl stop $proc_name'"
+      elif [[ "$proc_name" =~ docker-proxy ]]; then
+        local container_info=$(docker ps --filter "publish=${port}" --format "{{.Names}} (ID: {{.ID}})" 2>/dev/null || echo "")
+        if [ -n "$container_info" ]; then
+          log_hint "Conflicting container: '${container_info}' is binding port ${port}."
+          log_hint "To free port ${port}, run: 'docker stop $(echo "$container_info" | awk '{print $1}')'"
+        else
+          log_hint "A Docker container is using port ${port}. Run 'docker ps' to see active containers."
+        fi
       fi
       conflict_detected=1
     else

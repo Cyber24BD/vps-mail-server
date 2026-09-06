@@ -26,6 +26,7 @@ export const SecurityView: React.FC = () => {
       if (domList.length > 0) {
         const dom = domList[0].name;
         setSelectedDomain(dom);
+        setAdminEmail(`admin@${dom}`);
         const ssl = await api.getSslStatus(dom);
         setSslStatus(ssl);
       }

@@ -31,7 +31,15 @@ class ApiClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: 'Network request failed' }));
-      throw new Error(errorData.detail || `Error: ${response.status} ${response.statusText}`);
+      let detailMessage = `Error: ${response.status} ${response.statusText}`;
+      if (typeof errorData.detail === 'string') {
+        detailMessage = errorData.detail;
+      } else if (Array.isArray(errorData.detail)) {
+        detailMessage = errorData.detail.map((d: any) => d.msg || JSON.stringify(d)).join(', ');
+      } else if (errorData.detail) {
+        detailMessage = JSON.stringify(errorData.detail);
+      }
+      throw new Error(detailMessage);
     }
 
     if (response.status === 204) {

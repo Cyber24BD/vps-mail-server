@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, Plus, RefreshCw, Trash2, Copy, Check, Info } from 'lucide-react';
+import { Globe, Plus, RefreshCw, Trash2, Copy, Check, Info, Download } from 'lucide-react';
 import { api } from '../../services/api';
 import { StatusBadge } from '../common/StatusBadge';
 import { SkeletonCard } from '../common/SkeletonCard';
@@ -14,6 +14,9 @@ export const DomainsView: React.FC = () => {
   const [verifying, setVerifying] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  const [zoneFileContent, setZoneFileContent] = useState('');
+  const [zoneCopied, setZoneCopied] = useState(false);
 
   // Add domain form
   const [newDomain, setNewDomain] = useState('');
@@ -102,6 +105,109 @@ export const DomainsView: React.FC = () => {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const generateCloudflareZoneFile = (domain: Domain): string => {
+    const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    let content = `;;
+;; Domain:     ${domain.name}.
+;; Exported:   ${timestamp}
+;; Target:     Cloudflare DNS RFC-1035 / BIND Zone Import
+;;
+;; INSTRUCTIONS FOR CLOUDFLARE IMPORT:
+;; 1. In Cloudflare Dashboard, select "${domain.name}" -> DNS -> Records.
+;; 2. Click "Import and Export" -> "Import".
+;; 3. Upload this file.
+;; 4. Cloudflare will automatically configure all MX, SPF, DKIM, DMARC, and A records.
+;; Note: Mail A-records are tagged cf-proxied:false to enforce Grey Cloud (DNS Only).
+;;
+
+;; A Records (Mail Gateway - Unproxied)
+`;
+
+    const records = domain.dns_records || [];
+
+    // A records
+    const aRecords = records.filter((r) => r.record_type === 'A');
+    if (aRecords.length > 0) {
+      aRecords.forEach((r) => {
+        const fqdn = r.host.endsWith('.') ? r.host : `${r.host}.`;
+        content += `${fqdn}\t1\tIN\tA\t${r.expected_value}\t; cf_tags=cf-proxied:false\n`;
+      });
+    }
+
+    // MX records
+    content += `\n;; MX Records\n`;
+    const mxRecords = records.filter((r) => r.record_type === 'MX');
+    if (mxRecords.length > 0) {
+      mxRecords.forEach((r) => {
+        const fqdn = r.host.endsWith('.') ? r.host : `${r.host}.`;
+        let pri = '10';
+        let srv = r.expected_value;
+        if (srv.includes(' ')) {
+          const parts = srv.trim().split(/\s+/);
+          pri = parts[0];
+          srv = parts.slice(1).join(' ');
+        }
+        const srvFqdn = srv.endsWith('.') ? srv : `${srv}.`;
+        content += `${fqdn}\t1\tIN\tMX\t${pri}\t${srvFqdn}\n`;
+      });
+    }
+
+    // TXT records (SPF, DKIM, DMARC)
+    content += `\n;; TXT Records (SPF, DKIM, DMARC)\n`;
+    const txtRecords = records.filter((r) => r.record_type === 'TXT');
+    if (txtRecords.length > 0) {
+      txtRecords.forEach((r) => {
+        const fqdn = r.host.endsWith('.') ? r.host : `${r.host}.`;
+        // Clean value and wrap in quotes
+        let val = r.expected_value.trim();
+        if (val.startsWith('"') && val.endsWith('"')) {
+          val = val.substring(1, val.length - 1);
+        }
+        content += `${fqdn}\t1\tIN\tTXT\t"${val}"\n`;
+      });
+    }
+
+    // CNAME records
+    const cnameRecords = records.filter((r) => r.record_type === 'CNAME');
+    if (cnameRecords.length > 0) {
+      content += `\n;; CNAME Records\n`;
+      cnameRecords.forEach((r) => {
+        const fqdn = r.host.endsWith('.') ? r.host : `${r.host}.`;
+        const targetFqdn = r.expected_value.endsWith('.') ? r.expected_value : `${r.expected_value}.`;
+        content += `${fqdn}\t1\tIN\tCNAME\t${targetFqdn}\t; cf_tags=cf-proxied:false\n`;
+      });
+    }
+
+    return content;
+  };
+
+  const handleOpenExport = () => {
+    if (!selectedDomain) return;
+    const zoneText = generateCloudflareZoneFile(selectedDomain);
+    setZoneFileContent(zoneText);
+    setZoneCopied(false);
+    setIsExportOpen(true);
+  };
+
+  const handleDownloadZoneFile = () => {
+    if (!selectedDomain || !zoneFileContent) return;
+    const blob = new Blob([zoneFileContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${selectedDomain.name}-cloudflare-dns.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyZoneContent = () => {
+    navigator.clipboard.writeText(zoneFileContent);
+    setZoneCopied(true);
+    setTimeout(() => setZoneCopied(false), 2500);
+  };
+
   if (loading) {
     return <SkeletonCard lines={6} height="350px" />;
   }
@@ -183,6 +289,15 @@ export const DomainsView: React.FC = () => {
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    className="btn-secondary"
+                    onClick={handleOpenExport}
+                    title="Export BIND RFC-1035 Zone file for 1-click Cloudflare DNS Import"
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Download size={14} />
+                    <span>Export Cloudflare DNS (.txt)</span>
+                  </button>
                   <button
                     className="btn-primary"
                     onClick={handleVerifyDns}
@@ -503,6 +618,83 @@ export const DomainsView: React.FC = () => {
             <button className="btn-secondary" onClick={() => setIsAddOpen(false)}>Cancel</button>
             <button className="btn-primary" onClick={handleCreateDomain} disabled={adding}>
               {adding ? 'Generating DKIM & Adding...' : 'Add Domain'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Cloudflare Zone File Export Modal */}
+      <Modal
+        isOpen={isExportOpen}
+        onClose={() => setIsExportOpen(false)}
+        title={`Cloudflare DNS Zone Export (${selectedDomain?.name})`}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div
+            style={{
+              backgroundColor: '#F8F9FA',
+              border: '1px solid #E5E7EB',
+              borderRadius: '8px',
+              padding: '12px 14px',
+              fontSize: '12.5px',
+              color: '#374151',
+              lineHeight: 1.5,
+            }}
+          >
+            <strong>How to import to Cloudflare:</strong>
+            <ol style={{ margin: '6px 0 0', paddingLeft: '20px' }}>
+              <li>Download the <code>.txt</code> file below or copy the contents.</li>
+              <li>In Cloudflare Dashboard, navigate to <strong>DNS &rarr; Records</strong>.</li>
+              <li>Click <strong>Import and Export</strong> &rarr; <strong>Import</strong> and upload this file.</li>
+              <li>Cloudflare will automatically populate your A, MX, SPF, DKIM, and DMARC records without any manual typing!</li>
+            </ol>
+          </div>
+
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: '#6B7280' }}>
+                RFC 1035 BIND Zone Preview:
+              </span>
+              <span style={{ fontSize: '11px', color: '#16A34A', fontWeight: 600 }}>
+                • cf-proxied:false enforced (Grey Cloud)
+              </span>
+            </div>
+            <pre
+              style={{
+                backgroundColor: '#1E293B',
+                color: '#F8FAFC',
+                padding: '14px',
+                borderRadius: '8px',
+                fontFamily: 'monospace',
+                fontSize: '12px',
+                maxHeight: '260px',
+                overflowY: 'auto',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all',
+                lineHeight: '1.5',
+                border: '1px solid #334155',
+              }}
+            >
+              {zoneFileContent}
+            </pre>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '4px' }}>
+            <button
+              className="btn-secondary"
+              onClick={handleCopyZoneContent}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              {zoneCopied ? <Check size={14} color="#2B8A3E" strokeWidth={2.5} /> : <Copy size={14} />}
+              <span>{zoneCopied ? 'Copied to Clipboard!' : 'Copy All Text'}</span>
+            </button>
+            <button
+              className="btn-primary"
+              onClick={handleDownloadZoneFile}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Download size={14} />
+              <span>Download .txt File</span>
             </button>
           </div>
         </div>

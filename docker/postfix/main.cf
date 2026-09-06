@@ -44,6 +44,7 @@ virtual_transport = lmtp:inet:dovecot:24
 virtual_mailbox_domains = pgsql:/etc/postfix/sql/pgsql-virtual-mailbox-domains.cf
 virtual_mailbox_maps = pgsql:/etc/postfix/sql/pgsql-virtual-mailbox-maps.cf
 virtual_alias_maps = pgsql:/etc/postfix/sql/pgsql-virtual-alias-maps.cf
+virtual_alias_domains =
 
 # Security & Restriction Rules
 smtpd_helo_required = yes

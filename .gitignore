@@ -86,3 +86,9 @@ backups/
 *~
 .DS_Store
 Thumbs.db
+
+# Internal Specifications & Notes
+design.md
+prd.md
+DESIGN.md
+PRD.md

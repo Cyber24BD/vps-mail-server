@@ -80,13 +80,16 @@ sync_sql_maps() {
 
 configure_ufw() {
   if command -v ufw &> /dev/null && ufw status | grep -q "Status: active"; then
-    log_info "Active UFW firewall detected. Enabling required mail and web ports..."
+    log_info "Active UFW firewall detected. Enabling required mail, web, and remote management ports..."
+    ufw allow 22/tcp comment "SSH Server (Safety Rule)" >/dev/null 2>&1 || true
     ufw allow 25/tcp comment "SMTP Gateway" >/dev/null 2>&1 || true
     ufw allow 80/tcp comment "HTTP / ACME" >/dev/null 2>&1 || true
     ufw allow 443/tcp comment "HTTPS Webmail" >/dev/null 2>&1 || true
+    ufw allow 465/tcp comment "SMTPS Secure Submission" >/dev/null 2>&1 || true
     ufw allow 587/tcp comment "SMTP Submission" >/dev/null 2>&1 || true
+    ufw allow 143/tcp comment "IMAP STARTTLS" >/dev/null 2>&1 || true
     ufw allow 993/tcp comment "IMAPS Secure" >/dev/null 2>&1 || true
     ufw allow "${CHOSEN_CONTROL_PORT}/tcp" comment "Bootstrap Control Panel" >/dev/null 2>&1 || true
-    log_success "UFW rules applied (Ports 25, 80, 443, 587, 993, ${CHOSEN_CONTROL_PORT})."
+    log_success "UFW rules applied (Ports 22, 25, 80, 143, 443, 465, 587, 993, ${CHOSEN_CONTROL_PORT})."
   fi
 }

@@ -47,6 +47,7 @@ check_resources
 check_mail_ports
 assign_control_port
 detect_public_ip
+check_outbound_smtp
 
 # Stage 2: Container Engine Verification
 log_info "Stage 2: Verifying Container Engine (Docker & Compose)..."

@@ -120,3 +120,15 @@ detect_public_ip() {
   PUBLIC_IP=$(curl -s -4 https://ifconfig.me || curl -s -4 https://api.ipify.org || echo "127.0.0.1")
   log_success "Detected Public IP: ${PUBLIC_IP}"
 }
+
+check_outbound_smtp() {
+  log_info "Auditing Outbound Port 25 connectivity to external mail networks..."
+  if timeout 3 bash -c '</dev/tcp/smtp.gmail.com/25' 2>/dev/null || timeout 3 nc -z -w 3 smtp.gmail.com 25 2>/dev/null; then
+    log_success "Outbound Port 25 is OPEN (Direct delivery to Gmail, Outlook & Yahoo enabled)."
+  else
+    log_warn "Outbound Port 25 appears BLOCKED by your VPS provider (DigitalOcean, Vultr, AWS, etc.)."
+    log_hint "Your server can RECEIVE mail immediately. To SEND mail to external servers, either:"
+    log_hint "  1. Request an unblock: Submit a ticket to your VPS provider: 'Please unblock outbound Port 25 for my mail server.'"
+    log_hint "  2. Or configure an SMTP Relay (e.g. Amazon SES, SendGrid, Mailjet, Brevo) in Postfix relayhost."
+  fi
+}

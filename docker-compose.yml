@@ -47,10 +47,10 @@ services:
       - POSTGRES_SERVER=postgres
       - REDIS_HOST=redis
     volumes:
-      - vmail_data:/var/mail-platform/vmail
-      - dkim_data:/var/mail-platform/dkim
-      - ssl_data:/var/mail-platform/ssl
-      - backup_data:/var/mail-platform/backups
+      - ${MAIL_DIR:-/var/mail-platform/vmail}:/var/mail-platform/vmail
+      - ${DKIM_DIR:-/var/mail-platform/dkim}:/var/mail-platform/dkim
+      - ${SSL_DIR:-/var/mail-platform/ssl}:/var/mail-platform/ssl
+      - ${BACKUP_DIR:-/var/mail-platform/backups}:/var/mail-platform/backups
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       postgres:
@@ -73,10 +73,10 @@ services:
       - POSTGRES_SERVER=postgres
       - REDIS_HOST=redis
     volumes:
-      - vmail_data:/var/mail-platform/vmail
-      - dkim_data:/var/mail-platform/dkim
-      - ssl_data:/var/mail-platform/ssl
-      - backup_data:/var/mail-platform/backups
+      - ${MAIL_DIR:-/var/mail-platform/vmail}:/var/mail-platform/vmail
+      - ${DKIM_DIR:-/var/mail-platform/dkim}:/var/mail-platform/dkim
+      - ${SSL_DIR:-/var/mail-platform/ssl}:/var/mail-platform/ssl
+      - ${BACKUP_DIR:-/var/mail-platform/backups}:/var/mail-platform/backups
     depends_on:
       postgres:
         condition: service_healthy
@@ -107,9 +107,9 @@ services:
       - ./docker/postfix/main.cf:/etc/postfix/main.cf:ro
       - ./docker/postfix/master.cf:/etc/postfix/master.cf:ro
       - ./docker/postfix/sql:/etc/postfix/sql:ro
-      - vmail_data:/var/mail-platform/vmail
-      - ssl_data:/etc/ssl/certs/corpmail:ro
-      - dkim_data:/etc/dkim:ro
+      - ${MAIL_DIR:-/var/mail-platform/vmail}:/var/mail-platform/vmail
+      - ${SSL_DIR:-/var/mail-platform/ssl}:/etc/ssl/certs/corpmail:ro
+      - ${DKIM_DIR:-/var/mail-platform/dkim}:/etc/dkim:ro
     depends_on:
       - postgres
       - dovecot
@@ -128,8 +128,8 @@ services:
       - ./docker/dovecot/dovecot.conf:/etc/dovecot/dovecot.conf:ro
       - ./docker/dovecot/conf.d:/etc/dovecot/conf.d:ro
       - ./docker/dovecot/dovecot-sql.conf.ext:/etc/dovecot/dovecot-sql.conf.ext:ro
-      - vmail_data:/var/mail-platform/vmail
-      - ssl_data:/etc/ssl/certs/corpmail:ro
+      - ${MAIL_DIR:-/var/mail-platform/vmail}:/var/mail-platform/vmail
+      - ${SSL_DIR:-/var/mail-platform/ssl}:/etc/ssl/certs/corpmail:ro
     depends_on:
       - postgres
     networks:
@@ -143,7 +143,7 @@ services:
       - "11334:11334"
     volumes:
       - ./docker/rspamd/local.d:/etc/rspamd/local.d:ro
-      - dkim_data:/var/lib/rspamd/dkim:ro
+      - ${DKIM_DIR:-/var/mail-platform/dkim}:/var/lib/rspamd/dkim:ro
       - redis_data:/var/lib/redis
     depends_on:
       - redis
@@ -168,7 +168,7 @@ services:
     volumes:
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
-      - ssl_data:/etc/letsencrypt:ro
+      - ${SSL_DIR:-/var/mail-platform/ssl}:/etc/letsencrypt:ro
     depends_on:
       - backend
       - frontend
@@ -178,10 +178,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  vmail_data:
-  dkim_data:
-  ssl_data:
-  backup_data:
 
 networks:
   corpmail-net:

@@ -15,8 +15,9 @@ class ApiClient {
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const token = this.getToken();
+    const isFormData = options.body instanceof FormData;
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(options.headers as Record<string, string>),
     };
 
@@ -191,19 +192,108 @@ class ApiClient {
   }
 
   // --- Webmail ---
-  async getWebmailFolders() {
-    return this.request<any[]>('/webmail/folders');
+  async getWebmailAccounts() {
+    return this.request<any[]>('/webmail/accounts');
   }
 
-  async getWebmailMessages(folder: string = 'inbox') {
-    return this.request<any[]>(`/webmail/messages?folder=${folder}`);
+  async getWebmailFolders(mailbox?: string) {
+    const qs = mailbox ? `?mailbox=${encodeURIComponent(mailbox)}` : '';
+    return this.request<any>(`/webmail/folders${qs}`);
   }
 
-  async sendEmail(recipient: string, subject: string, body: string) {
+  async getWebmailMessages(folder: string = 'inbox', mailbox?: string, search?: string, limit: number = 50, offset: number = 0) {
+    const params = new URLSearchParams({ folder, limit: String(limit), offset: String(offset) });
+    if (mailbox) params.append('mailbox', mailbox);
+    if (search) params.append('search', search);
+    return this.request<any[]>(`/webmail/messages?${params.toString()}`);
+  }
+
+  async getWebmailMessage(messageId: string, folder: string = 'inbox', mailbox?: string) {
+    const params = new URLSearchParams({ folder });
+    if (mailbox) params.append('mailbox', mailbox);
+    return this.request<any>(`/webmail/messages/${encodeURIComponent(messageId)}?${params.toString()}`);
+  }
+
+  async sendWebmail(formData: FormData) {
     return this.request<any>('/webmail/send', {
       method: 'POST',
-      body: JSON.stringify({ recipient, subject, body }),
+      body: formData,
     });
+  }
+
+  async sendWebmailJson(data: any) {
+    return this.request<any>('/webmail/send-json', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async checkSpamScore(subject: string, bodyText: string, bodyHtml?: string, attachmentNames?: string[]) {
+    return this.request<any>('/webmail/spam-check', {
+      method: 'POST',
+      body: JSON.stringify({
+        subject,
+        body_text: bodyText,
+        body_html: bodyHtml,
+        attachment_names: attachmentNames,
+      }),
+    });
+  }
+
+  async moveWebmailMessage(messageId: string, fromFolder: string, targetFolder: string, mailbox?: string) {
+    const qs = mailbox ? `?folder=${encodeURIComponent(fromFolder)}&mailbox=${encodeURIComponent(mailbox)}` : `?folder=${encodeURIComponent(fromFolder)}`;
+    return this.request<any>(`/webmail/messages/${encodeURIComponent(messageId)}/move${qs}`, {
+      method: 'POST',
+      body: JSON.stringify({ target_folder: targetFolder }),
+    });
+  }
+
+  async deleteWebmailMessage(messageId: string, folder: string = 'inbox', mailbox?: string) {
+    const qs = mailbox ? `?folder=${encodeURIComponent(folder)}&mailbox=${encodeURIComponent(mailbox)}` : `?folder=${encodeURIComponent(folder)}`;
+    return this.request<any>(`/webmail/messages/${encodeURIComponent(messageId)}${qs}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async markWebmailSpam(messageId: string, folder: string = 'inbox', mailbox?: string) {
+    const qs = mailbox ? `?folder=${encodeURIComponent(folder)}&mailbox=${encodeURIComponent(mailbox)}` : `?folder=${encodeURIComponent(folder)}`;
+    return this.request<any>(`/webmail/messages/${encodeURIComponent(messageId)}/mark-spam${qs}`, {
+      method: 'POST',
+    });
+  }
+
+  async markWebmailHam(messageId: string, mailbox?: string) {
+    const qs = mailbox ? `?mailbox=${encodeURIComponent(mailbox)}` : '';
+    return this.request<any>(`/webmail/messages/${encodeURIComponent(messageId)}/mark-ham${qs}`, {
+      method: 'POST',
+    });
+  }
+
+  async executeWebmailBulk(action: string, messageIds: string[], folder: string, targetFolder?: string, mailbox?: string) {
+    const qs = mailbox ? `?mailbox=${encodeURIComponent(mailbox)}` : '';
+    return this.request<any>(`/webmail/bulk${qs}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        action,
+        message_ids: messageIds,
+        folder,
+        target_folder: targetFolder,
+      }),
+    });
+  }
+
+  async injectTestEmail(mailbox?: string, sampleType: string = 'welcome') {
+    const params = new URLSearchParams({ sample_type: sampleType });
+    if (mailbox) params.append('mailbox', mailbox);
+    return this.request<any>(`/webmail/test-delivery?${params.toString()}`, {
+      method: 'POST',
+    });
+  }
+
+  getAttachmentDownloadUrl(messageId: string, index: number, folder: string = 'inbox', mailbox?: string) {
+    const params = new URLSearchParams({ folder });
+    if (mailbox) params.append('mailbox', mailbox);
+    return `${API_BASE}/webmail/messages/${encodeURIComponent(messageId)}/attachments/${index}?${params.toString()}`;
   }
 
   // --- Platform Updates ---

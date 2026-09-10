@@ -13,8 +13,11 @@ class MailService:
         Sets appropriate permissions for vmail UID:GID 5000
         """
         full_path = os.path.join(settings.VMAIL_DIR, maildir_relative)
-        for sub in ["cur", "new", "tmp", ".Drafts", ".Sent", ".Trash", ".Junk", ".Archive"]:
-            os.makedirs(os.path.join(full_path, sub), exist_ok=True)
+        folders = ["inbox", "Sent", "Drafts", "Trash", "Spam", "Archive", ".Sent", ".Drafts", ".Trash", ".Spam", ".Archive"]
+        for f in folders:
+            folder_dir = full_path if f == "inbox" else os.path.join(full_path, f)
+            for sub in ["cur", "new", "tmp"]:
+                os.makedirs(os.path.join(folder_dir, sub), exist_ok=True)
 
         # On Linux VPS host, assign permissions to 5000:5000
         if hasattr(os, "chown"):

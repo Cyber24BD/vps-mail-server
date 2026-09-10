@@ -87,17 +87,67 @@ export interface SystemResourceMetrics {
   mail_queue_count: number;
 }
 
+export interface WebmailAttachment {
+  index: number;
+  filename: string;
+  content_type: string;
+  size: number;
+}
+
 export interface WebmailMessage {
   id: string;
   folder: string;
   sender: string;
   recipient: string;
+  cc?: string;
   subject: string;
   snippet: string;
   body_text?: string;
+  body_html?: string;
   date: string;
   is_read: boolean;
+  is_starred: boolean;
   has_attachment: boolean;
+  attachments?: WebmailAttachment[];
+}
+
+export interface FolderStat {
+  key: string;
+  name: string;
+  unread: number;
+  total: number;
+}
+
+export interface MailboxStorageSummary {
+  folders: FolderStat[];
+  bytes_used: number;
+  quota_bytes: number;
+  messages_used: number;
+  quota_percent: number;
+}
+
+export interface MailboxAccountItem {
+  email: string;
+  full_name: string;
+  quota_bytes: number;
+  bytes_used: number;
+  is_active: boolean;
+}
+
+export interface SpamTrigger {
+  rule: string;
+  description: string;
+  points: number;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+}
+
+export interface SpamCheckResult {
+  score: number;
+  verdict: 'clean' | 'warning' | 'rejected';
+  risk_level: 'low' | 'moderate' | 'critical';
+  recommendation: string;
+  triggers: SpamTrigger[];
+  is_safe: boolean;
 }
 
 export interface BootstrapStatus {

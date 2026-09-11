@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, Plus, RefreshCw, Trash2, Copy, Check, Info, Download } from 'lucide-react';
+import { Globe, Plus, RefreshCw, Trash2, Copy, Check, Info, Download, Lock, ShieldCheck } from 'lucide-react';
 import { api } from '../../services/api';
 import { StatusBadge } from '../common/StatusBadge';
 import { SkeletonCard } from '../common/SkeletonCard';
@@ -12,6 +12,8 @@ export const DomainsView: React.FC = () => {
   const [selectedDomain, setSelectedDomain] = useState<Domain | null>(null);
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
+  const [issuingSsl, setIssuingSsl] = useState(false);
+  const [sslMessage, setSslMessage] = useState<string | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -86,6 +88,23 @@ export const DomainsView: React.FC = () => {
       alert(err.message || 'Verification failed');
     } finally {
       setVerifying(false);
+    }
+  };
+
+  const handleIssueSsl = async () => {
+    if (!selectedDomain) return;
+    setIssuingSsl(true);
+    setSslMessage(null);
+    try {
+      const res = await api.issueSsl(selectedDomain.name, `admin@${selectedDomain.name}`);
+      setSslMessage(res.message || 'SSL Certificate issued successfully');
+      const detail = await api.getDomain(selectedDomain.id);
+      setSelectedDomain(detail);
+      await loadDomains();
+    } catch (err: any) {
+      alert(err.message || 'Failed to issue SSL certificate');
+    } finally {
+      setIssuingSsl(false);
     }
   };
 
@@ -333,7 +352,14 @@ export const DomainsView: React.FC = () => {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{dom.name}</span>
-                    <StatusBadge status={dom.verification_status} icon={false} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {dom.ssl_status === 'active' && (
+                        <span title="SSL Active" style={{ color: '#2B8A3E', display: 'flex', alignItems: 'center' }}>
+                          <Lock size={12} />
+                        </span>
+                      )}
+                      <StatusBadge status={dom.verification_status} icon={false} />
+                    </div>
                   </div>
                   <span style={{ fontSize: '12px', color: '#6B7280' }}>{dom.mail_hostname}</span>
                 </div>
@@ -346,9 +372,28 @@ export const DomainsView: React.FC = () => {
             <div className="card-standard" style={{ padding: '24px', overflow: 'hidden' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', paddingBottom: '16px', borderBottom: '1px solid #E5E7EB' }}>
                 <div>
-                  <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#111827' }}>
-                    {selectedDomain.name}
-                  </h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#111827' }}>
+                      {selectedDomain.name}
+                    </h3>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        backgroundColor: selectedDomain.ssl_status === 'active' ? '#EBFBEE' : '#FFF9DB',
+                        color: selectedDomain.ssl_status === 'active' ? '#2B8A3E' : '#B45309',
+                        border: `1px solid ${selectedDomain.ssl_status === 'active' ? '#B2F2BB' : '#FFEC99'}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      <Lock size={11} />
+                      {selectedDomain.ssl_status === 'active' ? 'SSL Active' : 'SSL Pending'}
+                    </span>
+                  </div>
                   <p style={{ fontSize: '12.5px', color: '#6B7280', marginTop: '3px' }}>
                     Gateway Host: <code style={{ backgroundColor: '#F1F3F5', padding: '2px 6px', borderRadius: '4px' }}>{selectedDomain.mail_hostname}</code> | DKIM Selector: <code style={{ backgroundColor: '#F1F3F5', padding: '2px 6px', borderRadius: '4px' }}>{selectedDomain.dkim_selector}</code>
                   </p>
@@ -363,6 +408,16 @@ export const DomainsView: React.FC = () => {
                   >
                     <Download size={14} />
                     <span>Export Cloudflare DNS (.txt)</span>
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    onClick={handleIssueSsl}
+                    disabled={issuingSsl}
+                    title="Issue or Renew Let's Encrypt SSL Certificate"
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Lock size={14} className={issuingSsl ? 'animate-spin' : ''} />
+                    <span>{issuingSsl ? 'Issuing SSL...' : selectedDomain.ssl_status === 'active' ? 'SSL Active (Renew)' : 'Issue Free SSL'}</span>
                   </button>
                   <button
                     className="btn-primary"
@@ -382,6 +437,26 @@ export const DomainsView: React.FC = () => {
                   </button>
                 </div>
               </div>
+
+              {sslMessage && (
+                <div
+                  style={{
+                    backgroundColor: '#EBFBEE',
+                    border: '1px solid #2B8A3E',
+                    borderRadius: '8px',
+                    padding: '10px 14px',
+                    marginBottom: '14px',
+                    fontSize: '12.5px',
+                    color: '#1B5E20',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <ShieldCheck size={16} />
+                  <span>{sslMessage}</span>
+                </div>
+              )}
 
               {/* DNS Registrar Quick Cheat-Sheet Banner */}
               <div

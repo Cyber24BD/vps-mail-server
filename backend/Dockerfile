@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     dnsutils \
     iputils-ping \
     openssl \
+    certbot \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

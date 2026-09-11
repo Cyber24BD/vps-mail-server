@@ -8,6 +8,7 @@ from app.repositories.domain_repo import DomainRepository
 from app.repositories.mailbox_repo import MailboxRepository
 from app.schemas.mailbox import MailboxCreate, MailboxUpdate, MailboxOut, QuotaUpdate
 from app.services.mail_service import MailService
+from app.services.security_service import SecurityService
 from app.api.deps import get_current_admin, log_action
 
 router = APIRouter()
@@ -67,6 +68,16 @@ async def create_mailbox(
 
     # 4. Provision physical Maildir on host
     MailService.provision_mailbox_directory(mailbox.maildir)
+
+    # 5. Check SSL for domain and auto-provision if DNS is verified
+    try:
+        SecurityService.auto_provision_ssl_if_needed(
+            domain_name=domain.name,
+            mail_hostname=domain.mail_hostname,
+            admin_email=f"admin@{domain.name}"
+        )
+    except Exception:
+        pass
 
     await log_action(
         db,

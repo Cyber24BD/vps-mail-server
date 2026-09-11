@@ -48,6 +48,7 @@ services:
       - ${MAIL_DIR:-/var/mail-platform/vmail}:/var/mail-platform/vmail
       - ${DKIM_DIR:-/var/mail-platform/dkim}:/var/mail-platform/dkim
       - ${SSL_DIR:-/var/mail-platform/ssl}:/var/mail-platform/ssl
+      - ${CERTBOT_DIR:-/var/mail-platform/certbot}:/var/www/certbot
       - ${BACKUP_DIR:-/var/mail-platform/backups}:/var/mail-platform/backups
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
@@ -74,6 +75,7 @@ services:
       - ${MAIL_DIR:-/var/mail-platform/vmail}:/var/mail-platform/vmail
       - ${DKIM_DIR:-/var/mail-platform/dkim}:/var/mail-platform/dkim
       - ${SSL_DIR:-/var/mail-platform/ssl}:/var/mail-platform/ssl
+      - ${CERTBOT_DIR:-/var/mail-platform/certbot}:/var/www/certbot
       - ${BACKUP_DIR:-/var/mail-platform/backups}:/var/mail-platform/backups
     depends_on:
       postgres:

@@ -41,6 +41,7 @@ class DomainDetailOut(DomainOut):
     total_mailboxes: int = 0
     total_aliases: int = 0
     total_groups: int = 0
+    ssl_status: Optional[str] = None
 
 
 class DnsVerificationResult(BaseModel):
@@ -48,3 +49,5 @@ class DnsVerificationResult(BaseModel):
     domain_name: str
     overall_status: str  # active, action_required
     records: List[DnsRecordOut]
+    ssl_status: Optional[str] = None
+    ssl_message: Optional[str] = None

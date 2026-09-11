@@ -22,6 +22,8 @@ export interface Domain {
   total_mailboxes?: number;
   total_aliases?: number;
   total_groups?: number;
+  ssl_status?: string | null;
+  ssl_message?: string | null;
 }
 
 export interface Mailbox {

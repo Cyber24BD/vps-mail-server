@@ -144,18 +144,66 @@ export const SecurityView: React.FC = () => {
               </div>
             </div>
 
-            <div style={{ padding: '12px 14px', backgroundColor: '#F8F9FA', borderRadius: '8px', border: '1px solid #E5E7EB', fontSize: '12.5px', color: '#4B5563' }}>
-              <strong>Current Certificate: </strong> {sslStatus?.details || 'Self-signed bootstrap certificate active'}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+              <div style={{ padding: '12px 14px', backgroundColor: '#F8F9FA', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
+                <span style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', fontWeight: 600 }}>Issuer</span>
+                <div style={{ fontSize: '13.5px', fontWeight: 600, color: '#111827', marginTop: '2px' }}>
+                  {sslStatus?.issuer || 'Unknown'}
+                </div>
+              </div>
+
+              <div style={{ padding: '12px 14px', backgroundColor: '#F8F9FA', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
+                <span style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', fontWeight: 600 }}>Certificate Type</span>
+                <div style={{ fontSize: '13.5px', fontWeight: 600, color: sslStatus?.type === 'letsencrypt' ? '#2B8A3E' : '#B45309', marginTop: '2px' }}>
+                  {sslStatus?.type === 'letsencrypt' ? "Trusted Let's Encrypt" : "Bootstrap Self-Signed"}
+                </div>
+              </div>
+
+              <div style={{ padding: '12px 14px', backgroundColor: '#F8F9FA', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
+                <span style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', fontWeight: 600 }}>Expiration / Validity</span>
+                <div style={{ fontSize: '13.5px', fontWeight: 600, color: (sslStatus?.days_remaining ?? 0) > 15 ? '#111827' : '#DC2626', marginTop: '2px' }}>
+                  {sslStatus?.days_remaining != null ? `${sslStatus.days_remaining} days remaining` : 'N/A'}
+                </div>
+              </div>
+
+              <div style={{ padding: '12px 14px', backgroundColor: '#F8F9FA', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
+                <span style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', fontWeight: 600 }}>Domain Covered</span>
+                <div style={{ fontSize: '13.5px', fontWeight: 600, color: sslStatus?.covers_domain ? '#2B8A3E' : '#D97706', marginTop: '2px' }}>
+                  {sslStatus?.covers_domain ? '✓ Active & Covered' : '⚠ Not Yet Covered'}
+                </div>
+              </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            {sslStatus?.covered_domains && sslStatus.covered_domains.length > 0 && (
+              <div style={{ fontSize: '12px', color: '#4B5563', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 600 }}>Protected Hostnames:</span>
+                {sslStatus.covered_domains.map((h: string) => (
+                  <code key={h} style={{ backgroundColor: '#EEF2F6', padding: '2px 6px', borderRadius: '4px', fontSize: '11.5px', color: '#1E293B' }}>
+                    {h}
+                  </code>
+                ))}
+              </div>
+            )}
+
+            <div style={{ padding: '12px 14px', backgroundColor: '#F0FDF4', borderRadius: '8px', border: '1px solid #BBF7D0', fontSize: '12.5px', color: '#166534' }}>
+              <strong>Automated SSL Management: </strong>
+              Certificates are automatically requested when DNS points to your server and auto-renewed every 60 days in the background. Manual issuance below is available if you wish to trigger immediate re-issuance.
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button
                 className="btn-primary"
                 onClick={handleIssueSsl}
                 disabled={issuing}
               >
                 <RefreshCw size={14} className={issuing ? 'animate-spin' : ''} />
-                <span>{issuing ? 'Executing ACME Challenge...' : "Issue Free Let's Encrypt SSL"}</span>
+                <span>
+                  {issuing 
+                    ? 'Executing ACME Challenge...' 
+                    : sslStatus?.type === 'letsencrypt' && sslStatus?.covers_domain
+                    ? "Renew / Re-issue Certificate"
+                    : "Issue Free Let's Encrypt SSL"}
+                </span>
               </button>
             </div>
           </div>

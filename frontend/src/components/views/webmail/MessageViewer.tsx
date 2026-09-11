@@ -18,6 +18,28 @@ interface MessageViewerProps {
   onMarkHam: (msgId: string) => void;
 }
 
+const getInitials = (nameOrEmail: string): string => {
+  if (!nameOrEmail) return '?';
+  const clean = nameOrEmail.trim().replace(/^["']|["']$/g, '');
+  if (clean.includes('@')) {
+    const local = clean.split('@')[0];
+    return local.substring(0, 2).toUpperCase();
+  }
+  const parts = clean.split(/\s+/);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return clean.substring(0, 2).toUpperCase();
+};
+
+const formatBytes = (bytes: number): string => {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+};
+
 export const MessageViewer: React.FC<MessageViewerProps> = ({
   message,
   currentFolder,

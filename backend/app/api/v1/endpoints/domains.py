@@ -8,6 +8,7 @@ from app.repositories.domain_repo import DomainRepository
 from app.schemas.domain import DomainCreate, DomainOut, DomainDetailOut, DnsRecordOut, DnsVerificationResult
 from app.services.crypto_service import CryptoService
 from app.services.dns_service import DnsService
+from app.services.security_service import SecurityService
 from app.api.deps import get_current_admin, log_action
 
 router = APIRouter()
@@ -146,11 +147,29 @@ async def verify_domain_dns(
     await domain_repo.update_status(domain, status=overall_status, is_active=all_verified)
     await db.commit()
 
+    ssl_status_label = None
+    ssl_msg = None
+    # Automatically trigger Let's Encrypt SSL issuance when DNS A record is verified
+    if all_verified:
+        try:
+            ssl_res = SecurityService.auto_provision_ssl_if_needed(
+                domain_name=domain.name,
+                mail_hostname=domain.mail_hostname,
+                admin_email=f"admin@{domain.name}"
+            )
+            ssl_status_label = ssl_res.get("status")
+            ssl_msg = ssl_res.get("message") or ssl_res.get("reason")
+        except Exception as e:
+            ssl_status_label = "error"
+            ssl_msg = str(e)
+
     return DnsVerificationResult(
         domain_id=domain.id,
         domain_name=domain.name,
         overall_status=overall_status,
-        records=updated_records
+        records=updated_records,
+        ssl_status=ssl_status_label,
+        ssl_message=ssl_msg
     )
 
 

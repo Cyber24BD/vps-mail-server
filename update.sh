@@ -207,6 +207,10 @@ if ! docker compose up -d --build; then
   exit 1
 fi
 
+# Always restart Nginx reverse proxy so it immediately picks up fresh container internal IPs
+log_info "Synchronizing reverse proxy upstream IP bindings..."
+docker compose restart nginx || true
+
 # Stage 7: Post-Update Health Probe
 log_info "Stage 7: Validating microservice operational health..."
 MAX_RETRIES=15

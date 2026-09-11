@@ -36,7 +36,18 @@ export const App: React.FC = () => {
       setMailboxCount(status.total_mailboxes);
 
       const token = localStorage.getItem('corpmail_token');
-      setIsAuthenticated(!!token);
+      if (token) {
+        try {
+          await api.getMe();
+          setIsAuthenticated(true);
+        } catch {
+          api.removeToken();
+          setIsAuthenticated(false);
+          setLoginError('Your session has expired. Please sign in again.');
+        }
+      } else {
+        setIsAuthenticated(false);
+      }
     } catch (err) {
       console.error(err);
       // Fallback for offline dev
@@ -46,6 +57,16 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     checkBootstrap();
+
+    const handleAuthExpired = () => {
+      setIsAuthenticated(false);
+      setLoginError('Your session has expired. Please sign in again.');
+    };
+
+    window.addEventListener('corpmail:auth_expired', handleAuthExpired);
+    return () => {
+      window.removeEventListener('corpmail:auth_expired', handleAuthExpired);
+    };
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {

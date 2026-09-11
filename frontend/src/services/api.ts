@@ -31,6 +31,10 @@ class ApiClient {
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        this.removeToken();
+        window.dispatchEvent(new CustomEvent('corpmail:auth_expired'));
+      }
       const errorData = await response.json().catch(() => ({ detail: 'Network request failed' }));
       let detailMessage = `Error: ${response.status} ${response.statusText}`;
       if (typeof errorData.detail === 'string') {
@@ -51,6 +55,10 @@ class ApiClient {
   }
 
   // --- Auth & Bootstrap ---
+  async getMe() {
+    return this.request<any>('/auth/me');
+  }
+
   async getBootstrapStatus() {
     return this.request<any>('/bootstrap/status');
   }

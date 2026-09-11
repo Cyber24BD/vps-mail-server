@@ -7,8 +7,10 @@ import {
   HardDrive,
   RefreshCw,
   GitPullRequest,
-  ArrowUpCircle
-
+  ArrowUpCircle,
+  Terminal,
+  Copy,
+  Check
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { MetricCard } from '../common/MetricCard';
@@ -23,6 +25,9 @@ export const DashboardView: React.FC = () => {
   const [metrics, setMetrics] = useState<SystemResourceMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [updateMsg, setUpdateMsg] = useState<{ text: string; isError: boolean } | null>(null);
+  const [copiedCmd, setCopiedCmd] = useState(false);
 
   const loadData = async () => {
     try {
@@ -205,31 +210,81 @@ export const DashboardView: React.FC = () => {
           Your email data, SSL certificates, and database credentials remain completely isolated and intact.
         </p>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8F9FA', padding: '14px 18px', borderRadius: '10px', border: '1px solid #E5E7EB' }}>
-          <div>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>
-              Repository: <code>Cyber24BD/vps-mail-server</code>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {updateMsg && (
+            <div
+              style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                backgroundColor: updateMsg.isError ? '#FFF5F5' : '#EBFBEE',
+                border: `1px solid ${updateMsg.isError ? '#C92A2A' : '#2B8A3E'}`,
+                color: updateMsg.isError ? '#961C1C' : '#1B5E20',
+                fontSize: '13px',
+              }}
+            >
+              {updateMsg.text}
             </div>
-            <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '2px' }}>
-              One-click upgrades execute safely in the background with pre-update SQL snapshots.
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8F9FA', padding: '14px 18px', borderRadius: '10px', border: '1px solid #E5E7EB', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>
+                Repository: <code>Cyber24BD/vps-mail-server</code> (Branch: <code>main</code>)
+              </div>
+              <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '2px' }}>
+                One-click upgrades create an automatic PostgreSQL backup before pulling and rebuilding.
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button
+                className="btn-primary"
+                disabled={updating}
+                onClick={async () => {
+                  if (!confirm('Are you sure you want to trigger a 1-click update? The system will create a safety backup, pull latest code from GitHub, and rebuild containers.')) return;
+                  setUpdating(true);
+                  setUpdateMsg(null);
+                  try {
+                    const res = await api.applyUpdate();
+                    setUpdateMsg({ text: res.message || 'Update initiated in background.', isError: false });
+                  } catch (err: any) {
+                    if (err.message && (err.message.includes('expired') || err.message.includes('401'))) {
+                      setUpdateMsg({ text: 'Your session has expired. Please sign in again to perform updates.', isError: true });
+                    } else {
+                      setUpdateMsg({ text: err.message || 'Failed to trigger update', isError: true });
+                    }
+                  } finally {
+                    setUpdating(false);
+                  }
+                }}
+              >
+                {updating ? <RefreshCw size={15} className="animate-spin" /> : <ArrowUpCircle size={15} />}
+                <span>{updating ? 'Initiating Update...' : '1-Click Update Now'}</span>
+              </button>
             </div>
           </div>
 
-          <button
-            className="btn-primary"
-            onClick={async () => {
-              if (!confirm('Are you sure you want to trigger a 1-click update? The system will create a safety backup, pull latest code from GitHub, and rebuild containers.')) return;
-              try {
-                const res = await api.applyUpdate();
-                alert(res.message || 'Update started in background.');
-              } catch (err: any) {
-                alert(err.message || 'Failed to trigger update');
-              }
-            }}
-          >
-            <ArrowUpCircle size={15} />
-            <span>1-Click Update Now</span>
-          </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#EEF2F6', padding: '10px 14px', borderRadius: '8px', fontSize: '12px', color: '#334155' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Terminal size={14} color="#475569" />
+              <span>Interactive VPS Terminal Command (with full component selection & restart prompts):</span>
+              <code style={{ backgroundColor: '#FFFFFF', padding: '2px 8px', borderRadius: '4px', fontWeight: 600, color: '#0F172A' }}>
+                sudo ./update.sh
+              </code>
+            </div>
+            <button
+              className="btn-ghost"
+              style={{ padding: '3px 8px', fontSize: '11px', height: 'auto', display: 'flex', alignItems: 'center', gap: '4px' }}
+              onClick={() => {
+                navigator.clipboard?.writeText('sudo ./update.sh');
+                setCopiedCmd(true);
+                setTimeout(() => setCopiedCmd(false), 2000);
+              }}
+            >
+              {copiedCmd ? <Check size={12} color="#2B8A3E" /> : <Copy size={12} />}
+              <span>{copiedCmd ? 'Copied' : 'Copy Command'}</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

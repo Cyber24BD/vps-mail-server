@@ -25,6 +25,13 @@ export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
+  // Auto-collapse sidebar in Corporate Webmail to maximize mail reading workspace
+  useEffect(() => {
+    if (currentTab === 'webmail') {
+      setIsSidebarCollapsed(true);
+    }
+  }, [currentTab]);
+
   // Login form states
   const [loginUser, setLoginUser] = useState('');
   const [loginPass, setLoginPass] = useState('');
@@ -192,8 +199,8 @@ export const App: React.FC = () => {
       <main
         style={{
           display: 'flex',
-          gap: isWebmail ? '12px' : '24px',
-          padding: isWebmail ? '8px 12px' : '24px 32px',
+          gap: isWebmail ? '10px' : '24px',
+          padding: isWebmail ? '6px 12px 0 12px' : '24px 32px',
           width: '100%',
           maxWidth: '100%',
           margin: '0',

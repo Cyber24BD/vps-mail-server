@@ -300,7 +300,7 @@ export const InlineReplyBox: React.FC<InlineReplyBoxProps> = ({
       ref={containerRef}
       onKeyDown={handleKeyDown}
       style={{
-        margin: '16px 28px 28px',
+        margin: '12px 22px 18px',
         border: '1px solid #D1D5DB',
         borderRadius: '12px',
         backgroundColor: '#FFFFFF',

@@ -610,7 +610,7 @@ export const WebmailView: React.FC = () => {
         height: '100%',
         maxHeight: '100%',
         minHeight: 0,
-        gap: '8px',
+        gap: '6px',
         overflow: 'hidden',
         boxSizing: 'border-box',
       }}
@@ -773,12 +773,13 @@ export const WebmailView: React.FC = () => {
         style={{
           display: 'flex',
           flex: 1,
-          height: 'calc(100% - 46px)',
+          height: '100%',
           minHeight: 0,
           overflow: 'hidden',
-          borderRadius: '12px',
+          borderRadius: '12px 12px 0 0',
+          borderBottom: 'none',
           padding: 0,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+          boxShadow: '0 -2px 10px rgba(0,0,0,0.02)',
         }}
       >
         {/* Pane 1: Folders Sidebar */}

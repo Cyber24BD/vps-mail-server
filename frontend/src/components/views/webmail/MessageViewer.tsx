@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Mail, Reply, CornerUpRight, Trash2, AlertOctagon,
   Download, Paperclip, File, Image as ImageIcon, Edit3, Zap,
@@ -65,11 +65,32 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({
   const [allowRemoteImages, setAllowRemoteImages] = useState(false);
   const [inlineReplyMode, setInlineReplyMode] = useState<'reply' | 'reply_all' | 'forward' | null>(null);
   const replyBoxRef = useRef<HTMLDivElement>(null);
+  const [iframeHeight, setIframeHeight] = useState<number>(650);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Reset inline reply state when message changes
+  const updateIframeHeight = useCallback(() => {
+    try {
+      const doc = iframeRef.current?.contentDocument || iframeRef.current?.contentWindow?.document;
+      if (doc) {
+        const scrollH = Math.max(
+          doc.body?.scrollHeight || 0,
+          doc.documentElement?.scrollHeight || 0,
+          doc.body?.offsetHeight || 0,
+          500
+        );
+        setIframeHeight(scrollH + 30);
+      }
+    } catch {
+      setIframeHeight(700);
+    }
+  }, []);
+
+  // Reset inline reply state and recalculate iframe height when message changes
   useEffect(() => {
     setInlineReplyMode(null);
-  }, [message?.id]);
+    const timer = setTimeout(updateIframeHeight, 100);
+    return () => clearTimeout(timer);
+  }, [message?.id, updateIframeHeight]);
 
   const handleTriggerInline = (mode: 'reply' | 'reply_all' | 'forward') => {
     setInlineReplyMode(mode);
@@ -234,7 +255,7 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({
       </div>
 
       {/* Message Header */}
-      <div style={{ padding: '24px 28px', borderBottom: '1px solid #F1F3F5' }}>
+      <div style={{ padding: '16px 22px', borderBottom: '1px solid #F1F3F5' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
           <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0, lineHeight: 1.4 }}>
             {message.subject}
@@ -437,28 +458,34 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({
         </div>
       )}
 
-      {/* Message Body Content */}
-      <div style={{ padding: '24px 28px', flex: 1 }}>
+      {/* Message Body Content - Expands Full */}
+      <div style={{ padding: '18px 22px', flex: 1, minHeight: '550px', display: 'flex', flexDirection: 'column' }}>
         {viewMode === 'html' && message.body_html ? (
           <iframe
+            ref={iframeRef}
             title="Email Content"
-            srcDoc={`<!DOCTYPE html><html><head><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;line-height:1.6;color:#1F2937;margin:0;padding:8px;}img{max-width:100%;height:auto;}pre{background:#f8f9fa;padding:8px;border-radius:6px;overflow-x:auto;}</style></head><body>${sanitizedHtml}</body></html>`}
-            sandbox="allow-popups allow-popups-to-escape-sandbox"
+            onLoad={updateIframeHeight}
+            srcDoc={`<!DOCTYPE html><html><head><style>html,body{margin:0;padding:10px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;line-height:1.65;color:#1F2937;}img{max-width:100%;height:auto;}pre{background:#f8f9fa;padding:10px;border-radius:6px;overflow-x:auto;}table{max-width:100%;border-collapse:collapse;}</style></head><body>${sanitizedHtml}</body></html>`}
+            sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
             style={{
               width: '100%',
-              minHeight: '400px',
+              height: `${iframeHeight}px`,
+              minHeight: '500px',
               border: 'none',
               backgroundColor: '#FFFFFF',
+              display: 'block',
             }}
           />
         ) : (
           <div
             style={{
-              fontSize: '14px',
-              lineHeight: 1.6,
+              fontSize: '14.5px',
+              lineHeight: 1.65,
               color: '#1F2937',
               whiteSpace: 'pre-wrap',
               fontFamily: 'inherit',
+              minHeight: '400px',
+              padding: '6px 4px',
             }}
           >
             {message.body_text || message.snippet}
@@ -488,7 +515,7 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({
           ) : (
             <div
               style={{
-                padding: '16px 28px 24px',
+                padding: '14px 22px 18px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '12px',

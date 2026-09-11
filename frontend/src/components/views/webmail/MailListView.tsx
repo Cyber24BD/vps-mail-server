@@ -51,7 +51,7 @@ export const MailListView: React.FC<MailListViewProps> = ({
   return (
     <div
       style={{
-        width: '360px',
+        width: '310px',
         borderRight: '1px solid #E5E7EB',
         display: 'flex',
         flexDirection: 'column',

@@ -32,6 +32,7 @@ interface SidebarCardProps {
   onSelectTab: (tab: NavTab) => void;
   domainCount: number;
   mailboxCount: number;
+  userRole?: string;
 }
 
 export const SidebarCard: React.FC<SidebarCardProps> = ({
@@ -39,8 +40,9 @@ export const SidebarCard: React.FC<SidebarCardProps> = ({
   onSelectTab,
   domainCount,
   mailboxCount,
+  userRole = 'admin',
 }) => {
-  const navItems: NavItem[] = [
+  const allNavItems: NavItem[] = [
     { id: 'dashboard', label: 'System Overview', icon: LayoutDashboard },
     { id: 'domains', label: 'Domains & DNS', icon: Globe, badge: domainCount },
     { id: 'mailboxes', label: 'Mailboxes & Quotas', icon: Users, badge: mailboxCount },
@@ -49,6 +51,10 @@ export const SidebarCard: React.FC<SidebarCardProps> = ({
     { id: 'security', label: 'Security & SSL', icon: ShieldCheck },
     { id: 'diagnostics', label: 'Diagnostics & Logs', icon: Activity },
   ];
+
+  const navItems = userRole === 'user'
+    ? allNavItems.filter((item) => item.id === 'webmail')
+    : allNavItems;
 
   return (
     <aside
@@ -70,7 +76,7 @@ export const SidebarCard: React.FC<SidebarCardProps> = ({
       <div>
         <div style={{ padding: '8px 12px 14px', borderBottom: '1px solid #E5E7EB', marginBottom: '10px' }}>
           <span style={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Control Center
+            {userRole === 'user' ? 'Webmail Portal' : 'Control Center'}
           </span>
         </div>
 

@@ -121,7 +121,10 @@ class MaildirService:
         tmp_p = os.path.join(folder_root, "tmp")
 
         for d in [cur_p, new_p, tmp_p]:
-            os.makedirs(d, exist_ok=True)
+            try:
+                os.makedirs(d, exist_ok=True)
+            except Exception:
+                pass
 
         return cur_p, new_p, tmp_p
 

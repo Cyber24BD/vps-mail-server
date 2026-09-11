@@ -35,6 +35,19 @@ class AdminOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AuthUserOut(BaseModel):
+    id: uuid.UUID
+    username: str
+    email: EmailStr
+    role: str
+    type: str = "admin"
+    is_active: bool
+    last_login: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 
 class BootstrapStatus(BaseModel):
     is_bootstrapped: bool

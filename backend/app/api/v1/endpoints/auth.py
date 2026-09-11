@@ -7,8 +7,9 @@ from app.core.security import verify_password, create_access_token
 from app.core.config import settings
 from app.repositories.admin_repo import AdminRepository
 from app.repositories.mailbox_repo import MailboxRepository
-from app.schemas.auth import Token, AdminOut
+from app.schemas.auth import Token, AdminOut, AuthUserOut
 from app.api.deps import get_current_admin, log_action
+from app.core.security import oauth2_scheme, decode_token
 
 router = APIRouter()
 
@@ -53,6 +54,54 @@ async def login(
     )
 
 
-@router.get("/me", response_model=AdminOut)
-async def get_me(current_admin = Depends(get_current_admin)):
-    return current_admin
+@router.get("/me", response_model=AuthUserOut)
+async def get_me(
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db)
+):
+    payload = decode_token(token)
+    username = payload.get("sub")
+    user_type = payload.get("type", "admin")
+
+    if not username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token payload"
+        )
+
+    if user_type == "mailbox":
+        mailbox_repo = MailboxRepository(db)
+        mb = await mailbox_repo.get_by_email(username)
+        if not mb or not mb.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Mailbox account not found or suspended"
+            )
+        return AuthUserOut(
+            id=mb.id,
+            username=mb.email,
+            email=mb.email,
+            role="user",
+            type="mailbox",
+            is_active=mb.is_active,
+            created_at=mb.created_at
+        )
+
+    # Administrator account
+    admin_repo = AdminRepository(db)
+    admin = await admin_repo.get_by_username(username)
+    if not admin or not admin.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Administrator account not found or deactivated"
+        )
+    return AuthUserOut(
+        id=admin.id,
+        username=admin.username,
+        email=admin.email,
+        role=admin.role,
+        type="admin",
+        is_active=admin.is_active,
+        last_login=admin.last_login,
+        created_at=admin.created_at
+    )

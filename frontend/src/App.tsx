@@ -19,6 +19,7 @@ export const App: React.FC = () => {
   const [domainCount, setDomainCount] = useState<number>(0);
   const [mailboxCount, setMailboxCount] = useState<number>(0);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
 
   // Login form states
@@ -38,15 +39,21 @@ export const App: React.FC = () => {
       const token = localStorage.getItem('corpmail_token');
       if (token) {
         try {
-          await api.getMe();
+          const user = await api.getMe();
+          setCurrentUser(user);
           setIsAuthenticated(true);
+          if (user.type === 'mailbox' || user.role === 'user') {
+            setCurrentTab('webmail');
+          }
         } catch {
           api.removeToken();
+          setCurrentUser(null);
           setIsAuthenticated(false);
           setLoginError('Your session has expired. Please sign in again.');
         }
       } else {
         setIsAuthenticated(false);
+        setCurrentUser(null);
       }
     } catch (err) {
       console.error(err);
@@ -60,6 +67,7 @@ export const App: React.FC = () => {
 
     const handleAuthExpired = () => {
       setIsAuthenticated(false);
+      setCurrentUser(null);
       setLoginError('Your session has expired. Please sign in again.');
     };
 
@@ -86,6 +94,7 @@ export const App: React.FC = () => {
 
   const handleLogout = () => {
     api.removeToken();
+    setCurrentUser(null);
     setIsAuthenticated(false);
   };
 
@@ -163,7 +172,7 @@ export const App: React.FC = () => {
         publicIp={publicIp}
         isBootstrap={!bootstrapped}
         onLogout={handleLogout}
-        currentUser={loginUser || 'Administrator'}
+        currentUser={currentUser?.username || loginUser || 'Administrator'}
       />
 
       <main style={{ display: 'flex', gap: '24px', padding: '24px 32px', width: '100%', maxWidth: '100%', margin: '0', flex: 1, boxSizing: 'border-box' }}>
@@ -172,16 +181,23 @@ export const App: React.FC = () => {
           onSelectTab={setCurrentTab}
           domainCount={domainCount}
           mailboxCount={mailboxCount}
+          userRole={currentUser?.type === 'mailbox' || currentUser?.role === 'user' ? 'user' : 'admin'}
         />
 
         <section style={{ flex: 1, minWidth: 0 }}>
-          {currentTab === 'dashboard' && <DashboardView />}
-          {currentTab === 'domains' && <DomainsView />}
-          {currentTab === 'mailboxes' && <MailboxesView />}
-          {currentTab === 'aliases' && <AliasesView />}
-          {currentTab === 'webmail' && <WebmailView />}
-          {currentTab === 'security' && <SecurityView />}
-          {currentTab === 'diagnostics' && <DiagnosticsView />}
+          {currentUser?.type === 'mailbox' || currentUser?.role === 'user' ? (
+            <WebmailView />
+          ) : (
+            <>
+              {currentTab === 'dashboard' && <DashboardView />}
+              {currentTab === 'domains' && <DomainsView />}
+              {currentTab === 'mailboxes' && <MailboxesView />}
+              {currentTab === 'aliases' && <AliasesView />}
+              {currentTab === 'webmail' && <WebmailView />}
+              {currentTab === 'security' && <SecurityView />}
+              {currentTab === 'diagnostics' && <DiagnosticsView />}
+            </>
+          )}
         </section>
       </main>
     </div>

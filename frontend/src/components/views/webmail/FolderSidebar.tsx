@@ -44,6 +44,16 @@ export const FolderSidebar: React.FC<FolderSidebarProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
+  const defaultFolders: FolderStat[] = [
+    { key: 'inbox', name: 'Inbox', unread: 0, total: 0 },
+    { key: 'sent', name: 'Sent', unread: 0, total: 0 },
+    { key: 'drafts', name: 'Drafts', unread: 0, total: 0 },
+    { key: 'spam', name: 'Spam', unread: 0, total: 0 },
+    { key: 'trash', name: 'Trash', unread: 0, total: 0 },
+    { key: 'archive', name: 'Archive', unread: 0, total: 0 },
+  ];
+  const displayFolders = folders && folders.length > 0 ? folders : defaultFolders;
+
   const quotaPercent = storage ? storage.quota_percent : 0;
   // design.md section 2.3: 0-65% nominal (#2B8A3E), 66-84% elevated (#E67700), 85-100% critical (#C92A2A)
   const quotaColor = quotaPercent > 84 ? '#C92A2A' : quotaPercent > 65 ? '#E67700' : '#2B8A3E';
@@ -76,7 +86,7 @@ export const FolderSidebar: React.FC<FolderSidebarProps> = ({
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          {folders.map((f) => {
+          {displayFolders.map((f) => {
             const Icon = getFolderIcon(f.key);
             const isActive = currentFolder.toLowerCase() === f.key.toLowerCase();
             return (

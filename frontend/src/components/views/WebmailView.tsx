@@ -12,6 +12,7 @@ import { FolderSidebar } from './webmail/FolderSidebar';
 import { MailListView } from './webmail/MailListView';
 import { MessageViewer } from './webmail/MessageViewer';
 import { ComposerModal, type InitialAttachmentItem } from './webmail/ComposerModal';
+import type { PopOutData } from './webmail/InlineReplyBox';
 import type {
   WebmailMessage,
   FolderStat,
@@ -51,8 +52,9 @@ export const WebmailView: React.FC = () => {
     bodyHtml: string;
     bodyText: string;
     attachments?: InitialAttachmentItem[];
+    files?: File[];
     draftId?: string;
-  }>({ recipient: '', cc: '', bcc: '', subject: '', bodyHtml: '', bodyText: '', attachments: [] });
+  }>({ recipient: '', cc: '', bcc: '', subject: '', bodyHtml: '', bodyText: '', attachments: [], files: [] });
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<any>(null);
@@ -531,9 +533,35 @@ export const WebmailView: React.FC = () => {
       bodyHtml: msg.body_html || '',
       bodyText: msg.body_text || msg.snippet || '',
       attachments: [],
+      files: [],
       draftId: msg.id,
     });
     setIsComposeOpen(true);
+  };
+
+  // Handle pop-out from InlineReplyBox to floating ComposerModal
+  const handlePopOut = (data: PopOutData) => {
+    setComposerState({
+      recipient: data.recipient,
+      cc: data.cc,
+      bcc: data.bcc,
+      subject: data.subject,
+      bodyHtml: data.bodyHtml,
+      bodyText: data.bodyText,
+      attachments: [],
+      files: data.files,
+      draftId: undefined,
+    });
+    setIsComposeOpen(true);
+  };
+
+  // Handle successful inline reply/forward dispatch
+  const handleInlineSendSuccess = () => {
+    showToast('Email dispatched to SMTP queue and saved to Sent folder.');
+    loadFolders(activeMailbox);
+    if (currentFolder === 'sent' || currentFolder === 'inbox') {
+      loadMessages(currentFolder, activeMailbox, searchQuery);
+    }
   };
 
   // Test Delivery
@@ -794,6 +822,8 @@ export const WebmailView: React.FC = () => {
           onMarkSpam={handleMarkSpam}
           onMarkHam={handleMarkHam}
           onEditDraft={handleEditDraft}
+          onSendSuccess={handleInlineSendSuccess}
+          onPopOut={handlePopOut}
         />
       </div>
 
@@ -804,12 +834,12 @@ export const WebmailView: React.FC = () => {
           isOpen={isComposeOpen}
           onClose={() => {
             setIsComposeOpen(false);
-            setComposerState({ recipient: '', cc: '', bcc: '', subject: '', bodyHtml: '', bodyText: '', attachments: [], draftId: undefined });
+            setComposerState({ recipient: '', cc: '', bcc: '', subject: '', bodyHtml: '', bodyText: '', attachments: [], files: [], draftId: undefined });
           }}
           onSuccess={() => {
             showToast('Email dispatched to SMTP queue and saved to Sent folder.');
             setIsComposeOpen(false);
-            setComposerState({ recipient: '', cc: '', bcc: '', subject: '', bodyHtml: '', bodyText: '', attachments: [], draftId: undefined });
+            setComposerState({ recipient: '', cc: '', bcc: '', subject: '', bodyHtml: '', bodyText: '', attachments: [], files: [], draftId: undefined });
             loadFolders(activeMailbox);
             if (currentFolder === 'sent' || currentFolder === 'drafts') {
               loadMessages(currentFolder, activeMailbox, searchQuery);
@@ -823,6 +853,7 @@ export const WebmailView: React.FC = () => {
           initialBodyHtml={composerState.bodyHtml}
           initialBodyText={composerState.bodyText}
           initialAttachments={composerState.attachments}
+          initialFiles={composerState.files}
           draftId={composerState.draftId}
         />
       )}

@@ -26,6 +26,7 @@ interface ComposerModalProps {
   initialBodyHtml?: string;
   initialBodyText?: string;
   initialAttachments?: InitialAttachmentItem[];
+  initialFiles?: File[];
   draftId?: string;
 }
 
@@ -41,6 +42,7 @@ export const ComposerModal: React.FC<ComposerModalProps> = ({
   initialBodyHtml = '',
   initialBodyText = '',
   initialAttachments,
+  initialFiles,
   draftId,
 }) => {
   const [recipient, setRecipient] = useState(initialRecipient);
@@ -68,12 +70,12 @@ export const ComposerModal: React.FC<ComposerModalProps> = ({
       setBodyText(initialBodyText);
       setCc(initialCc);
       setBcc(initialBcc);
-      setFiles([]);
+      setFiles(initialFiles && initialFiles.length > 0 ? initialFiles : []);
       setErrorMessage(null);
       setSpamResult(null);
       setShowCcBcc(Boolean(initialCc || initialBcc));
     }
-  }, [isOpen, initialRecipient, initialCc, initialBcc, initialSubject, initialBodyHtml, initialBodyText]);
+  }, [isOpen, initialRecipient, initialCc, initialBcc, initialSubject, initialBodyHtml, initialBodyText, initialFiles]);
 
   // Load forwarded or existing message attachments as File objects
   useEffect(() => {

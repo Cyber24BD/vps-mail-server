@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Mail, Reply, CornerUpRight, Trash2, AlertOctagon,
   Download, Paperclip, File, Image as ImageIcon, Edit3, Zap,
@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import type { WebmailMessage } from '../../../types';
 import { api } from '../../../services/api';
+import { InlineReplyBox, type PopOutData } from './InlineReplyBox';
 
 interface MessageViewerProps {
   message: WebmailMessage | null;
@@ -19,6 +20,8 @@ interface MessageViewerProps {
   onMarkSpam: (msgId: string) => void;
   onMarkHam: (msgId: string) => void;
   onEditDraft?: (msg: WebmailMessage) => void;
+  onSendSuccess?: () => void;
+  onPopOut?: (data: PopOutData) => void;
 }
 
 const getInitials = (nameOrEmail: string): string => {
@@ -47,17 +50,33 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({
   message,
   currentFolder,
   activeMailbox,
-  onReply,
+  onReply: _onReply,
   onReplyAll,
-  onForward,
+  onForward: _onForward,
   onDelete,
   onMove,
   onMarkSpam,
   onMarkHam,
   onEditDraft,
+  onSendSuccess,
+  onPopOut,
 }) => {
   const [viewMode, setViewMode] = useState<'html' | 'text'>('html');
   const [allowRemoteImages, setAllowRemoteImages] = useState(false);
+  const [inlineReplyMode, setInlineReplyMode] = useState<'reply' | 'reply_all' | 'forward' | null>(null);
+  const replyBoxRef = useRef<HTMLDivElement>(null);
+
+  // Reset inline reply state when message changes
+  useEffect(() => {
+    setInlineReplyMode(null);
+  }, [message?.id]);
+
+  const handleTriggerInline = (mode: 'reply' | 'reply_all' | 'forward') => {
+    setInlineReplyMode(mode);
+    setTimeout(() => {
+      replyBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 60);
+  };
 
   // Process HTML body for image privacy (always call Hook before early return)
   const sanitizedHtml = React.useMemo(() => {
@@ -128,7 +147,7 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({
               <button
                 className="btn-secondary"
                 style={{ padding: '6px 12px', fontSize: '12px' }}
-                onClick={() => onReply(message)}
+                onClick={() => handleTriggerInline('reply')}
                 title="Reply to sender"
               >
                 <Reply size={14} />
@@ -138,7 +157,7 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({
                 <button
                   className="btn-secondary"
                   style={{ padding: '6px 12px', fontSize: '12px' }}
-                  onClick={() => onReplyAll(message)}
+                  onClick={() => handleTriggerInline('reply_all')}
                   title="Reply to sender and all recipients"
                 >
                   <ReplyAll size={14} />
@@ -148,7 +167,7 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({
               <button
                 className="btn-secondary"
                 style={{ padding: '6px 12px', fontSize: '12px' }}
-                onClick={() => onForward(message)}
+                onClick={() => handleTriggerInline('forward')}
                 title="Forward message"
               >
                 <CornerUpRight size={14} />
@@ -447,47 +466,119 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({
         )}
       </div>
 
-      {/* Bottom Quick Action Bar */}
+      {/* Inline Reply / Quick Action Workspace (Gmail & Outlook Style) */}
       {currentFolder.toLowerCase() !== 'drafts' && (
-        <div
-          style={{
-            padding: '16px 28px 24px',
-            borderTop: '1px solid #F1F3F5',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            backgroundColor: '#FFFFFF',
-          }}
-        >
-          <button
-            className="btn-secondary"
-            style={{ padding: '7px 14px', fontSize: '12.5px', borderRadius: '8px' }}
-            onClick={() => onReply(message)}
-            title="Reply to sender"
-          >
-            <Reply size={14} />
-            <span>Reply</span>
-          </button>
-          {onReplyAll && (
-            <button
-              className="btn-secondary"
-              style={{ padding: '7px 14px', fontSize: '12.5px', borderRadius: '8px' }}
-              onClick={() => onReplyAll(message)}
-              title="Reply to sender and all recipients"
+        <div ref={replyBoxRef} style={{ borderTop: '1px solid #F1F3F5', backgroundColor: '#FFFFFF' }}>
+          {inlineReplyMode !== null ? (
+            <InlineReplyBox
+              message={message}
+              activeMailbox={activeMailbox}
+              initialMode={inlineReplyMode}
+              currentFolder={currentFolder}
+              onClose={() => setInlineReplyMode(null)}
+              onSuccess={() => {
+                setInlineReplyMode(null);
+                onSendSuccess?.();
+              }}
+              onPopOut={(data) => {
+                setInlineReplyMode(null);
+                onPopOut?.(data);
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                padding: '16px 28px 24px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                backgroundColor: '#FFFFFF',
+              }}
             >
-              <ReplyAll size={14} />
-              <span>Reply All</span>
-            </button>
+              {/* Outlook / Gmail style inline prompt card */}
+              <div
+                onClick={() => handleTriggerInline('reply')}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '10px 16px',
+                  borderRadius: '10px',
+                  border: '1px solid #E2E8F0',
+                  backgroundColor: '#F8FAFC',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#CBD5E1';
+                  e.currentTarget.style.backgroundColor = '#F1F5F9';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = '#E2E8F0';
+                  e.currentTarget.style.backgroundColor = '#F8FAFC';
+                }}
+              >
+                <div
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    backgroundColor: '#2563EB',
+                    color: '#FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}
+                >
+                  {getInitials(activeMailbox)}
+                </div>
+                <span style={{ fontSize: '13px', color: '#64748B' }}>
+                  Reply to <strong style={{ color: '#1E293B' }}>{message.sender}</strong>...
+                </span>
+              </div>
+
+              {/* Quick Action Pills */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ padding: '7px 14px', fontSize: '12.5px', borderRadius: '8px' }}
+                  onClick={() => handleTriggerInline('reply')}
+                  title="Reply to sender"
+                >
+                  <Reply size={14} />
+                  <span>Reply</span>
+                </button>
+                {onReplyAll && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ padding: '7px 14px', fontSize: '12.5px', borderRadius: '8px' }}
+                    onClick={() => handleTriggerInline('reply_all')}
+                    title="Reply to sender and all recipients"
+                  >
+                    <ReplyAll size={14} />
+                    <span>Reply All</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ padding: '7px 14px', fontSize: '12.5px', borderRadius: '8px' }}
+                  onClick={() => handleTriggerInline('forward')}
+                  title="Forward message"
+                >
+                  <CornerUpRight size={14} />
+                  <span>Forward</span>
+                </button>
+              </div>
+            </div>
           )}
-          <button
-            className="btn-secondary"
-            style={{ padding: '7px 14px', fontSize: '12.5px', borderRadius: '8px' }}
-            onClick={() => onForward(message)}
-            title="Forward message"
-          >
-            <CornerUpRight size={14} />
-            <span>Forward</span>
-          </button>
         </div>
       )}
     </div>

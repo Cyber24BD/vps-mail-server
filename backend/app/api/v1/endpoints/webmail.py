@@ -130,8 +130,14 @@ class SaveDraftRequest(BaseModel):
 # Authentication & Mailbox Context Helpers
 # -------------------------------------------------------------------------
 
-async def get_current_user_context(token: str = Depends(oauth2_scheme)) -> Dict[str, Any]:
-    payload = decode_token(token)
+async def get_current_user_context(
+    token: Optional[str] = Depends(oauth2_scheme),
+    token_query: Optional[str] = Query(None, alias="token"),
+) -> Dict[str, Any]:
+    active_token = token or token_query
+    if not active_token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    payload = decode_token(active_token)
     user = payload.get("sub")
     role = payload.get("role", "user")
     token_type = payload.get("type", "mailbox")
@@ -477,9 +483,18 @@ async def send_email(
                 uploaded_files_data.append((None, file_bytes, upload.filename, upload.content_type))
 
     # Classify delivery path via modular MessageRoutingService
-    all_recipients = [recipient.strip().lower()]
+    all_recipients_raw = [recipient]
     if cc:
-        all_recipients.extend([c.strip().lower() for c in cc.split(",") if c.strip()])
+        all_recipients_raw.append(cc)
+    if bcc:
+        all_recipients_raw.append(bcc)
+
+    extracted_addrs = [
+        addr.strip().lower()
+        for _, addr in email.utils.getaddresses(all_recipients_raw)
+        if addr and "@" in addr
+    ]
+    all_recipients = list(dict.fromkeys(extracted_addrs))
 
     routing_plan = await MessageRoutingService.classify_and_route(
         sender_email=active_mb,
@@ -578,9 +593,19 @@ async def send_email(
         else:
             msg_to_send = msg
 
+        # Strip Bcc before external transmission to protect privacy
+        if "Bcc" in msg_to_send:
+            del msg_to_send["Bcc"]
+
         try:
-            with smtplib.SMTP("postfix", 25, timeout=2) as server:
-                server.send_message(msg_to_send)
+            with smtplib.SMTP("postfix", 25, timeout=5) as server:
+                # Crucial bug fix: explicitly provide to_addrs=routing_plan.external_recipients
+                # Prevents Postfix from re-delivering duplicate copies to internal recipients
+                server.send_message(
+                    msg_to_send,
+                    from_addr=active_mb,
+                    to_addrs=routing_plan.external_recipients
+                )
                 smtp_dispatched = True
         except Exception:
             pass
@@ -645,9 +670,18 @@ async def send_email_json(
         msg.add_alternative(req.body_html, subtype="html")
 
     # Classify delivery path via modular MessageRoutingService
-    all_recipients = [req.recipient.strip().lower()]
+    all_recipients_raw = [req.recipient]
     if req.cc:
-        all_recipients.extend([c.strip().lower() for c in req.cc.split(",") if c.strip()])
+        all_recipients_raw.append(req.cc)
+    if req.bcc:
+        all_recipients_raw.append(req.bcc)
+
+    extracted_addrs = [
+        addr.strip().lower()
+        for _, addr in email.utils.getaddresses(all_recipients_raw)
+        if addr and "@" in addr
+    ]
+    all_recipients = list(dict.fromkeys(extracted_addrs))
 
     routing_plan = await MessageRoutingService.classify_and_route(
         sender_email=active_mb,
@@ -679,9 +713,16 @@ async def send_email_json(
     # Dispatch via Postfix SMTP ONLY if external internet recipients exist
     smtp_dispatched = False
     if routing_plan.external_recipients and getattr(settings, "ENVIRONMENT", "") != "test":
+        # Strip Bcc before external transmission to protect privacy
+        if "Bcc" in msg:
+            del msg["Bcc"]
         try:
-            with smtplib.SMTP("postfix", 25, timeout=2) as server:
-                server.send_message(msg)
+            with smtplib.SMTP("postfix", 25, timeout=5) as server:
+                server.send_message(
+                    msg,
+                    from_addr=active_mb,
+                    to_addrs=routing_plan.external_recipients
+                )
                 smtp_dispatched = True
         except Exception:
             pass

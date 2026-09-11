@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Plus, Radio, RefreshCw, CheckCircle2, User, ChevronDown
+  Plus,
+  RefreshCw,
+  CheckCircle2,
+  User,
+  ChevronDown,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { SkeletonCard } from '../common/SkeletonCard';
@@ -9,7 +13,10 @@ import { MailListView } from './webmail/MailListView';
 import { MessageViewer } from './webmail/MessageViewer';
 import { ComposerModal } from './webmail/ComposerModal';
 import type {
-  WebmailMessage, FolderStat, MailboxStorageSummary, MailboxAccountItem
+  WebmailMessage,
+  FolderStat,
+  MailboxStorageSummary,
+  MailboxAccountItem,
 } from '../../types';
 
 export const WebmailView: React.FC = () => {
@@ -27,21 +34,32 @@ export const WebmailView: React.FC = () => {
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Folder sidebar collapse state
+  const [isFolderCollapsed, setIsFolderCollapsed] = useState(false);
+
+  // Live Sync status tracking
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
+  const [sseConnected, setSseConnected] = useState(false);
+
   // Composer reply/forward/draft initial state
   const [composerState, setComposerState] = useState<{
     recipient: string;
+    cc?: string;
+    bcc?: string;
     subject: string;
     bodyHtml: string;
     bodyText: string;
     draftId?: string;
-  }>({ recipient: '', subject: '', bodyHtml: '', bodyText: '' });
+  }>({ recipient: '', cc: '', bcc: '', subject: '', bodyHtml: '', bodyText: '' });
 
   const eventSourceRef = useRef<EventSource | null>(null);
+  const reconnectTimeoutRef = useRef<any>(null);
 
   // Show transient toast
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
+    setTimeout(() => setToastMessage(null), 4500);
   };
 
   // 1. Fetch available accounts
@@ -67,36 +85,54 @@ export const WebmailView: React.FC = () => {
       const summary = await api.getWebmailFolders(mb);
       setFolders(summary.folders);
       setStorage(summary);
+      setLastSyncTime(new Date());
     } catch (err) {
       console.error('Failed to load folders:', err);
     }
   }, []);
 
   // 3. Fetch messages for folder and auto-load message details
-  const loadMessages = useCallback(async (folder: string, mb: string, search?: string, targetId?: string) => {
-    try {
-      const mList = await api.getWebmailMessages(folder, mb, search);
-      setMessages(mList);
-      setSelectedIds(new Set());
-      if (mList.length > 0) {
-        const target = targetId
-          ? mList.find((m) => m.id === targetId) || mList[0]
-          : mList[0];
-        try {
-          const detail = await api.getWebmailMessage(target.id, folder, mb);
-          setSelectedMessage(detail);
-        } catch {
-          setSelectedMessage(target);
+  const loadMessages = useCallback(
+    async (folder: string, mb: string, search?: string, targetId?: string, silent: boolean = false) => {
+      if (!silent) setIsSyncing(true);
+      try {
+        const mList = await api.getWebmailMessages(folder, mb, search);
+        setMessages(mList);
+        setSelectedIds(new Set());
+        if (mList.length > 0) {
+          const target = targetId
+            ? mList.find((m) => m.id === targetId) || mList[0]
+            : mList[0];
+          try {
+            const detail = await api.getWebmailMessage(target.id, folder, mb);
+            setSelectedMessage(detail);
+          } catch {
+            setSelectedMessage(target);
+          }
+        } else {
+          setSelectedMessage(null);
         }
-      } else {
-        setSelectedMessage(null);
+        setLastSyncTime(new Date());
+      } catch (err) {
+        console.error('Failed to load messages:', err);
+      } finally {
+        setLoading(false);
+        setIsSyncing(false);
       }
-    } catch (err) {
-      console.error('Failed to load messages:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    []
+  );
+
+  // Trigger full sync
+  const handleManualSync = async () => {
+    if (!activeMailbox) return;
+    setIsSyncing(true);
+    await Promise.all([
+      loadFolders(activeMailbox),
+      loadMessages(currentFolder, activeMailbox, searchQuery),
+    ]);
+    setIsSyncing(false);
+  };
 
   // Fetch data when active mailbox or current folder changes
   useEffect(() => {
@@ -115,61 +151,112 @@ export const WebmailView: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchQuery, activeMailbox, currentFolder, loadMessages]);
 
-  // 4. Real-time Server-Sent Events (SSE) listener
+  // 4. Real-time Server-Sent Events (SSE) listener with Auto-Reconnect
   useEffect(() => {
     if (!activeMailbox) return;
 
-    const token = localStorage.getItem('corpmail_token');
-    const sseUrl = `/api/v1/webmail/events?mailbox=${encodeURIComponent(activeMailbox)}${token ? `&token=${token}` : ''}`;
+    let isMounted = true;
 
-    try {
-      const es = new EventSource(sseUrl);
-      eventSourceRef.current = es;
+    const connectSSE = () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
 
-      es.addEventListener('new_mail', (e: any) => {
-        try {
-          const data = JSON.parse(e.data);
-          const subj = data.subject || 'New Message';
-          const senderInfo = data.sender ? ` from ${data.sender}` : '';
-          showToast(`📩 New email${senderInfo}: "${subj}"`);
-          loadFolders(activeMailbox);
-          if (currentFolder === 'inbox' || currentFolder === data.folder) {
-            loadMessages(currentFolder, activeMailbox, searchQuery);
+      const token = localStorage.getItem('corpmail_token');
+      const sseUrl = `/api/v1/webmail/events?mailbox=${encodeURIComponent(activeMailbox)}${
+        token ? `&token=${encodeURIComponent(token)}` : ''
+      }`;
+
+      try {
+        const es = new EventSource(sseUrl);
+        eventSourceRef.current = es;
+
+        es.onopen = () => {
+          if (isMounted) {
+            setSseConnected(true);
           }
-        } catch {
+        };
+
+        es.addEventListener('new_mail', (e: any) => {
+          try {
+            const data = JSON.parse(e.data);
+            const subj = data.subject || 'New Message';
+            const senderInfo = data.sender ? ` from ${data.sender}` : '';
+            showToast(`📩 New email${senderInfo}: "${subj}"`);
+            loadFolders(activeMailbox);
+            if (currentFolder === 'inbox' || currentFolder === data.folder) {
+              loadMessages(currentFolder, activeMailbox, searchQuery, undefined, true);
+            }
+          } catch {
+            loadFolders(activeMailbox);
+            loadMessages(currentFolder, activeMailbox, searchQuery, undefined, true);
+          }
+        });
+
+        es.addEventListener('message_moved', () => {
           loadFolders(activeMailbox);
-          loadMessages(currentFolder, activeMailbox, searchQuery);
-        }
-      });
+          loadMessages(currentFolder, activeMailbox, searchQuery, undefined, true);
+        });
 
-      es.addEventListener('message_moved', () => {
+        es.addEventListener('message_deleted', () => {
+          loadFolders(activeMailbox);
+          loadMessages(currentFolder, activeMailbox, searchQuery, undefined, true);
+        });
+
+        es.addEventListener('bulk_action_completed', () => {
+          loadFolders(activeMailbox);
+          loadMessages(currentFolder, activeMailbox, searchQuery, undefined, true);
+        });
+
+        es.onerror = () => {
+          if (isMounted) {
+            setSseConnected(false);
+          }
+          es.close();
+          // Schedule reconnect attempt
+          clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (isMounted) {
+              connectSSE();
+            }
+          }, 5000);
+        };
+      } catch (err) {
+        console.warn('SSE connection failed:', err);
+      }
+    };
+
+    connectSSE();
+
+    // 5. Automatic Background Polling Fallback (every 10 seconds)
+    const pollInterval = setInterval(() => {
+      if (activeMailbox) {
         loadFolders(activeMailbox);
-        loadMessages(currentFolder, activeMailbox, searchQuery);
-      });
+        loadMessages(currentFolder, activeMailbox, searchQuery, selectedMessage?.id, true);
+      }
+    }, 10000);
 
-      es.addEventListener('message_deleted', () => {
+    // 6. Window Focus / Tab Return Immediate Sync
+    const handleFocusSync = () => {
+      if (document.visibilityState === 'visible' && activeMailbox) {
         loadFolders(activeMailbox);
-        loadMessages(currentFolder, activeMailbox, searchQuery);
-      });
-
-      es.addEventListener('bulk_action_completed', () => {
-        loadFolders(activeMailbox);
-        loadMessages(currentFolder, activeMailbox, searchQuery);
-      });
-
-      es.onerror = () => {
-        es.close();
-      };
-    } catch (err) {
-      console.warn('SSE not supported or failed to connect:', err);
-    }
+        loadMessages(currentFolder, activeMailbox, searchQuery, selectedMessage?.id, true);
+      }
+    };
+    window.addEventListener('focus', handleFocusSync);
+    document.addEventListener('visibilitychange', handleFocusSync);
 
     return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+      clearTimeout(reconnectTimeoutRef.current);
+      window.removeEventListener('focus', handleFocusSync);
+      document.removeEventListener('visibilitychange', handleFocusSync);
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
       }
     };
-  }, [activeMailbox, currentFolder, searchQuery, loadFolders, loadMessages]);
+  }, [activeMailbox, currentFolder, searchQuery, loadFolders, loadMessages, selectedMessage?.id]);
 
   // Select a message and load detail (marks as read)
   const handleSelectMessage = async (msg: WebmailMessage) => {
@@ -177,13 +264,19 @@ export const WebmailView: React.FC = () => {
     try {
       const detail = await api.getWebmailMessage(msg.id, currentFolder, activeMailbox);
       setSelectedMessage(detail);
-      // Update read status in local messages list & folders
       setMessages((prev) =>
         prev.map((m) => (m.id === msg.id ? { ...m, is_read: true } : m))
       );
-      loadFolders(activeMailbox);
-    } catch (err) {
-      console.error('Failed to load message detail:', err);
+      setFolders((prev) =>
+        prev.map((f) => {
+          if (f.key === currentFolder && f.unread > 0) {
+            return { ...f, unread: Math.max(0, f.unread - 1) };
+          }
+          return f;
+        })
+      );
+    } catch {
+      // Keep basic message
     }
   };
 
@@ -273,11 +366,50 @@ export const WebmailView: React.FC = () => {
     }
   };
 
-  // Reply & Forward
+  // Reply, Reply All & Forward
   const handleReply = (msg: WebmailMessage) => {
     const quote = `\n\n--- Original Message ---\nFrom: ${msg.sender}\nDate: ${msg.date}\n\n${msg.body_text || msg.snippet}`;
     setComposerState({
       recipient: msg.sender,
+      cc: '',
+      bcc: '',
+      subject: msg.subject.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`,
+      bodyHtml: `<p></p><blockquote style="border-left: 2px solid #D1D5DB; padding-left: 12px; margin-left: 0; color: #4B5563;"><strong>From:</strong> ${msg.sender}<br/><strong>Date:</strong> ${msg.date}<br/><br/>${msg.body_html || msg.body_text || ''}</blockquote>`,
+      bodyText: quote,
+    });
+    setIsComposeOpen(true);
+  };
+
+  const handleReplyAll = (msg: WebmailMessage) => {
+    const parseAddrs = (str?: string): string[] => {
+      if (!str) return [];
+      return str
+        .split(/[,;]+/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+    };
+
+    const myEmail = activeMailbox.toLowerCase();
+    const senderEmail = msg.sender.toLowerCase();
+
+    // Collect all candidates from recipient (To) and CC, exclude self and sender
+    const candidateAddrs = [...parseAddrs(msg.recipient), ...parseAddrs(msg.cc)];
+    const uniqueCc = Array.from(
+      new Set(
+        candidateAddrs
+          .map((a) => a.replace(/.*<([^>]+)>.*/, '$1').trim())
+          .filter((a) => {
+            const low = a.toLowerCase();
+            return low && !low.includes(myEmail) && !senderEmail.includes(low);
+          })
+      )
+    ).join(', ');
+
+    const quote = `\n\n--- Original Message ---\nFrom: ${msg.sender}\nDate: ${msg.date}\n\n${msg.body_text || msg.snippet}`;
+    setComposerState({
+      recipient: msg.sender,
+      cc: uniqueCc,
+      bcc: '',
       subject: msg.subject.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`,
       bodyHtml: `<p></p><blockquote style="border-left: 2px solid #D1D5DB; padding-left: 12px; margin-left: 0; color: #4B5563;"><strong>From:</strong> ${msg.sender}<br/><strong>Date:</strong> ${msg.date}<br/><br/>${msg.body_html || msg.body_text || ''}</blockquote>`,
       bodyText: quote,
@@ -288,6 +420,8 @@ export const WebmailView: React.FC = () => {
   const handleForward = (msg: WebmailMessage) => {
     setComposerState({
       recipient: '',
+      cc: '',
+      bcc: '',
       subject: msg.subject.startsWith('Fwd:') ? msg.subject : `Fwd: ${msg.subject}`,
       bodyHtml: `<p></p><hr/><p><strong>---------- Forwarded message ---------</strong><br/><strong>From:</strong> ${msg.sender}<br/><strong>Subject:</strong> ${msg.subject}<br/><strong>Date:</strong> ${msg.date}</p>${msg.body_html || msg.body_text || ''}`,
       bodyText: `\n\n---------- Forwarded message ---------\nFrom: ${msg.sender}\nSubject: ${msg.subject}\nDate: ${msg.date}\n\n${msg.body_text || msg.snippet}`,
@@ -299,6 +433,8 @@ export const WebmailView: React.FC = () => {
   const handleEditDraft = (msg: WebmailMessage) => {
     setComposerState({
       recipient: msg.recipient || '',
+      cc: msg.cc || '',
+      bcc: '',
       subject: msg.subject || '',
       bodyHtml: msg.body_html || '',
       bodyText: msg.body_text || msg.snippet || '',
@@ -341,18 +477,30 @@ export const WebmailView: React.FC = () => {
   };
 
   if (loading && accounts.length === 0) {
-    return <SkeletonCard lines={6} height="520px" />;
+    return <SkeletonCard lines={6} height="100%" />;
   }
 
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div
+      className="animate-fade-in"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        maxHeight: '100%',
+        minHeight: 0,
+        gap: '8px',
+        overflow: 'hidden',
+        boxSizing: 'border-box',
+      }}
+    >
       {/* Toast Notification */}
       {toastMessage && (
         <div
           style={{
             position: 'fixed',
             top: '20px',
-            right: '20px',
+            right: '24px',
             zIndex: 9999,
             backgroundColor: '#111827',
             color: '#FFFFFF',
@@ -363,7 +511,7 @@ export const WebmailView: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
           }}
         >
           <CheckCircle2 size={16} color="#40C057" />
@@ -371,37 +519,54 @@ export const WebmailView: React.FC = () => {
         </div>
       )}
 
-      {/* Top Action & Mailbox Switcher Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#111827', margin: 0 }}>
-              Corporate Webmail
-            </h2>
+      {/* Top Header Toolbar - Compact & Integrated */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '8px',
+          padding: '2px 4px',
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0, letterSpacing: '-0.02em' }}>
+            Corporate Webmail
+          </h2>
+
+          {/* Real-time Status Pill */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '3px 9px',
+              backgroundColor: sseConnected ? '#EBFBEE' : '#FFF9DB',
+              border: `1px solid ${sseConnected ? '#2B8A3E' : '#E67700'}`,
+              borderRadius: '20px',
+              fontSize: '11.5px',
+              fontWeight: 600,
+              color: sseConnected ? '#1B5E20' : '#A65D03',
+            }}
+            title={`${sseConnected ? 'Connected to live push notification stream' : 'Syncing via periodic polling'} (Updated ${lastSyncTime.toLocaleTimeString()})`}
+          >
             <div
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '2px 8px',
-                backgroundColor: '#EBFBEE',
-                border: '1px solid #2B8A3E',
-                borderRadius: '6px',
-                fontSize: '11px',
-                fontWeight: 600,
-                color: '#1B5E20',
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: sseConnected ? '#2B8A3E' : '#E67700',
               }}
-            >
-              <Radio size={12} color="#2B8A3E" className="animate-pulse" />
-              <span>Real-Time Sync Active</span>
-            </div>
+              className={isSyncing ? 'animate-ping' : ''}
+            />
+            <span>{isSyncing ? 'Syncing...' : sseConnected ? 'Live Sync' : 'Polling'}</span>
           </div>
-          <p style={{ fontSize: '13px', color: '#6B7280', margin: '4px 0 0' }}>
-            High-performance webmail connected directly to Dovecot IMAP and Postfix SMTP.
-          </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Action Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {/* Mailbox Switcher for Admins / Users */}
           {accounts.length > 1 ? (
             <div style={{ position: 'relative' }}>
@@ -409,13 +574,13 @@ export const WebmailView: React.FC = () => {
                 value={activeMailbox}
                 onChange={(e) => setActiveMailbox(e.target.value)}
                 style={{
-                  height: '38px',
-                  padding: '0 32px 0 12px',
-                  borderRadius: '8px',
-                  border: '1.5px solid #2D3139',
+                  height: '34px',
+                  padding: '0 28px 0 10px',
+                  borderRadius: '6px',
+                  border: '1px solid #D1D5DB',
                   backgroundColor: '#FFFFFF',
                   color: '#111827',
-                  fontSize: '13px',
+                  fontSize: '12.5px',
                   fontWeight: 600,
                   cursor: 'pointer',
                   appearance: 'none',
@@ -428,8 +593,8 @@ export const WebmailView: React.FC = () => {
                 ))}
               </select>
               <ChevronDown
-                size={14}
-                style={{ position: 'absolute', right: '10px', top: '12px', pointerEvents: 'none', color: '#6B7280' }}
+                size={13}
+                style={{ position: 'absolute', right: '8px', top: '10px', pointerEvents: 'none', color: '#6B7280' }}
               />
             </div>
           ) : accounts.length === 1 ? (
@@ -437,59 +602,62 @@ export const WebmailView: React.FC = () => {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
+                gap: '5px',
+                padding: '5px 10px',
                 backgroundColor: '#FFFFFF',
-                borderRadius: '8px',
+                borderRadius: '6px',
                 border: '1px solid #E5E7EB',
-                fontSize: '13px',
+                fontSize: '12.5px',
                 fontWeight: 600,
-                color: '#111827',
+                color: '#374151',
               }}
             >
-              <User size={14} color="#6B7280" />
+              <User size={13} color="#6B7280" />
               <span>{accounts[0].email}</span>
             </div>
           ) : null}
 
-          {/* Refresh Button */}
+          {/* Manual Refresh Button */}
           <button
             type="button"
             className="btn-secondary"
-            onClick={() => {
-              loadFolders(activeMailbox);
-              loadMessages(currentFolder, activeMailbox, searchQuery);
-            }}
-            title="Refresh folder"
+            onClick={handleManualSync}
+            disabled={isSyncing}
+            style={{ padding: '6px 10px', height: '34px' }}
+            title="Check for new mail"
           >
-            <RefreshCw size={14} />
+            <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
+            <span style={{ fontSize: '12px' }}>{isSyncing ? 'Syncing' : 'Sync'}</span>
           </button>
 
           {/* Compose Button */}
           <button
             type="button"
             className="btn-primary"
+            style={{ padding: '6px 14px', height: '34px', fontSize: '13px' }}
             onClick={() => {
-              setComposerState({ recipient: '', subject: '', bodyHtml: '', bodyText: '', draftId: undefined });
+              setComposerState({ recipient: '', cc: '', bcc: '', subject: '', bodyHtml: '', bodyText: '', draftId: undefined });
               setIsComposeOpen(true);
             }}
           >
-            <Plus size={16} />
-            <span>Compose Email</span>
+            <Plus size={15} />
+            <span>Compose</span>
           </button>
         </div>
       </div>
 
-      {/* Triple-Pane Webmail Workspace */}
+      {/* Triple-Pane Webmail Workspace - Fills Remaining Viewport */}
       <div
         className="card-standard"
         style={{
           display: 'flex',
-          height: 'calc(100vh - 210px)',
-          minHeight: '620px',
+          flex: 1,
+          height: 'calc(100% - 46px)',
+          minHeight: 0,
           overflow: 'hidden',
-          borderRadius: '16px',
+          borderRadius: '12px',
           padding: 0,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
         }}
       >
         {/* Pane 1: Folders Sidebar */}
@@ -501,6 +669,8 @@ export const WebmailView: React.FC = () => {
           onEmptyFolder={handleEmptyFolder}
           onTestDelivery={handleTestDelivery}
           testLoading={testLoading}
+          isCollapsed={isFolderCollapsed}
+          onToggleCollapse={() => setIsFolderCollapsed(!isFolderCollapsed)}
         />
 
         {/* Pane 2: Message Threads List */}
@@ -524,6 +694,7 @@ export const WebmailView: React.FC = () => {
           currentFolder={currentFolder}
           activeMailbox={activeMailbox}
           onReply={handleReply}
+          onReplyAll={handleReplyAll}
           onForward={handleForward}
           onDelete={handleDeleteMessage}
           onMove={handleMoveMessage}
@@ -538,11 +709,11 @@ export const WebmailView: React.FC = () => {
         isOpen={isComposeOpen}
         onClose={() => {
           setIsComposeOpen(false);
-          setComposerState({ recipient: '', subject: '', bodyHtml: '', bodyText: '', draftId: undefined });
+          setComposerState({ recipient: '', cc: '', bcc: '', subject: '', bodyHtml: '', bodyText: '', draftId: undefined });
         }}
         onSuccess={() => {
           showToast('Email dispatched to SMTP queue and saved to Sent folder.');
-          setComposerState({ recipient: '', subject: '', bodyHtml: '', bodyText: '', draftId: undefined });
+          setComposerState({ recipient: '', cc: '', bcc: '', subject: '', bodyHtml: '', bodyText: '', draftId: undefined });
           loadFolders(activeMailbox);
           if (currentFolder === 'sent' || currentFolder === 'drafts') {
             loadMessages(currentFolder, activeMailbox, searchQuery);
@@ -550,6 +721,8 @@ export const WebmailView: React.FC = () => {
         }}
         activeMailbox={activeMailbox}
         initialRecipient={composerState.recipient}
+        initialCc={composerState.cc}
+        initialBcc={composerState.bcc}
         initialSubject={composerState.subject}
         initialBodyHtml={composerState.bodyHtml}
         initialBodyText={composerState.bodyText}

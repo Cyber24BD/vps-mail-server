@@ -100,3 +100,19 @@ async def test_api_webmail_endpoints():
         }, headers=headers)
         assert res_bulk.status_code == 200
         assert res_bulk.json()["affected_count"] == 1
+
+        # 9. Query Token Authentication (used by EventSource SSE and direct API calls)
+        res_token_query = await client.get(f"/api/v1/webmail/folders?mailbox=testuser@example.com&token={token}")
+        assert res_token_query.status_code == 200
+        assert "folders" in res_token_query.json()
+
+        # 10. Send Email with Multiple CC Recipients (deduplicated, cleanly parsed)
+        res_send_cc = await client.post("/api/v1/webmail/send-json", json={
+            "recipient": "colleague@example.com, manager@example.com",
+            "cc": "external@otherdomain.com, manager@example.com",
+            "subject": "CC deduplication test",
+            "body_text": "Testing CC parsing and routing without duplicates.",
+            "mailbox": "testuser@example.com"
+        }, headers=headers)
+        assert res_send_cc.status_code == 200
+        assert res_send_cc.json()["success"] is True

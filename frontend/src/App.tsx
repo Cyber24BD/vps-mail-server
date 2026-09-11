@@ -23,6 +23,7 @@ export const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<any | null>(null);
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Login form states
   const [loginUser, setLoginUser] = useState('');
@@ -168,8 +169,19 @@ export const App: React.FC = () => {
     );
   }
 
+  const isWebmail = currentTab === 'webmail';
+
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#F8F9FA' }}>
+    <div
+      style={{
+        height: isWebmail ? '100vh' : undefined,
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: '#F8F9FA',
+        overflow: isWebmail ? 'hidden' : 'auto',
+      }}
+    >
       <Header
         publicIp={publicIp}
         isBootstrap={!bootstrapped}
@@ -177,16 +189,40 @@ export const App: React.FC = () => {
         currentUser={currentUser?.username || loginUser || 'Administrator'}
       />
 
-      <main style={{ display: 'flex', gap: '24px', padding: '24px 32px', width: '100%', maxWidth: '100%', margin: '0', flex: 1, boxSizing: 'border-box' }}>
+      <main
+        style={{
+          display: 'flex',
+          gap: isWebmail ? '12px' : '24px',
+          padding: isWebmail ? '8px 12px' : '24px 32px',
+          width: '100%',
+          maxWidth: '100%',
+          margin: '0',
+          flex: 1,
+          boxSizing: 'border-box',
+          height: isWebmail ? 'calc(100vh - 64px)' : undefined,
+          overflow: isWebmail ? 'hidden' : 'visible',
+        }}
+      >
         <SidebarCard
           currentTab={currentTab}
           onSelectTab={setCurrentTab}
           domainCount={domainCount}
           mailboxCount={mailboxCount}
           userRole={currentUser?.type === 'mailbox' || currentUser?.role === 'user' ? 'user' : 'admin'}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         />
 
-        <section style={{ flex: 1, minWidth: 0 }}>
+        <section
+          style={{
+            flex: 1,
+            minWidth: 0,
+            height: isWebmail ? '100%' : undefined,
+            display: isWebmail ? 'flex' : undefined,
+            flexDirection: isWebmail ? 'column' : undefined,
+            overflow: isWebmail ? 'hidden' : undefined,
+          }}
+        >
           {currentUser?.type === 'mailbox' || currentUser?.role === 'user' ? (
             <>
               {currentTab === 'storage' ? <StorageView /> : <WebmailView />}

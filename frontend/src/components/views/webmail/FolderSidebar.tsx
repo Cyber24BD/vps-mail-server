@@ -1,6 +1,15 @@
 import React from 'react';
 import {
-  Inbox, Send, FileText, AlertOctagon, Trash2, Archive, HardDrive, Sparkles
+  Inbox,
+  Send,
+  FileText,
+  AlertOctagon,
+  Trash2,
+  Archive,
+  HardDrive,
+  Sparkles,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import type { FolderStat, MailboxStorageSummary } from '../../../types';
 
@@ -12,6 +21,8 @@ interface FolderSidebarProps {
   onEmptyFolder?: (folderKey: string) => void;
   onTestDelivery?: () => void;
   testLoading?: boolean;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 export const FolderSidebar: React.FC<FolderSidebarProps> = ({
@@ -22,20 +33,28 @@ export const FolderSidebar: React.FC<FolderSidebarProps> = ({
   onEmptyFolder,
   onTestDelivery,
   testLoading = false,
+  isCollapsed = false,
+  onToggleCollapse,
 }) => {
   const getFolderIcon = (key: string) => {
     switch (key.toLowerCase()) {
-      case 'inbox': return Inbox;
-      case 'sent': return Send;
-      case 'drafts': return FileText;
-      case 'spam': return AlertOctagon;
-      case 'trash': return Trash2;
-      case 'archive': return Archive;
-      default: return Inbox;
+      case 'inbox':
+        return Inbox;
+      case 'sent':
+        return Send;
+      case 'drafts':
+        return FileText;
+      case 'spam':
+        return AlertOctagon;
+      case 'trash':
+        return Trash2;
+      case 'archive':
+        return Archive;
+      default:
+        return Inbox;
     }
   };
 
-  // Format bytes to human-readable string
   const formatBytes = (bytes: number) => {
     if (!bytes || bytes === 0) return '0 B';
     const k = 1024;
@@ -55,36 +74,75 @@ export const FolderSidebar: React.FC<FolderSidebarProps> = ({
   const displayFolders = folders && folders.length > 0 ? folders : defaultFolders;
 
   const quotaPercent = storage ? storage.quota_percent : 0;
-  // design.md section 2.3: 0-65% nominal (#2B8A3E), 66-84% elevated (#E67700), 85-100% critical (#C92A2A)
   const quotaColor = quotaPercent > 84 ? '#C92A2A' : quotaPercent > 65 ? '#E67700' : '#2B8A3E';
 
   return (
     <div
       style={{
-        width: '210px',
+        width: isCollapsed ? '56px' : '185px',
         borderRight: '1px solid #E5E7EB',
-        padding: '16px 10px',
+        padding: isCollapsed ? '12px 6px' : '12px 8px',
         backgroundColor: '#F8F9FA',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
         flexShrink: 0,
+        transition: 'width 180ms cubic-bezier(0.16, 1, 0.3, 1), padding 180ms ease',
+        overflow: 'hidden',
       }}
     >
       <div>
+        {/* Top Label & Collapse Button */}
         <div
           style={{
-            fontSize: '11px',
-            fontWeight: 700,
-            color: '#9CA3AF',
-            padding: '0 8px 10px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: isCollapsed ? 'center' : 'space-between',
+            padding: isCollapsed ? '0 0 10px' : '2px 6px 10px',
+            borderBottom: '1px solid #E5E7EB',
+            marginBottom: '8px',
           }}
         >
-          Mail Folders
+          {!isCollapsed && (
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                color: '#9CA3AF',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Folders
+            </span>
+          )}
+
+          {onToggleCollapse && (
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              title={isCollapsed ? 'Expand folders' : 'Collapse folders'}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '22px',
+                height: '22px',
+                borderRadius: '4px',
+                color: '#6B7280',
+                padding: 0,
+              }}
+            >
+              {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+            </button>
+          )}
         </div>
 
+        {/* Folders List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
           {displayFolders.map((f) => {
             const Icon = getFolderIcon(f.key);
@@ -93,34 +151,37 @@ export const FolderSidebar: React.FC<FolderSidebarProps> = ({
               <button
                 key={f.key}
                 onClick={() => onSelectFolder(f.key)}
+                title={isCollapsed ? `${f.name}${f.unread > 0 ? ` (${f.unread} unread)` : ''}` : undefined}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '8px 10px',
-                  borderRadius: '8px',
+                  justifyContent: isCollapsed ? 'center' : 'space-between',
+                  padding: isCollapsed ? '8px 0' : '7px 10px',
+                  borderRadius: '6px',
                   border: 'none',
                   backgroundColor: isActive ? '#FFFFFF' : 'transparent',
-                  boxShadow: isActive ? '0 1px 3px rgba(0,0,0,0.05)' : 'none',
+                  boxShadow: isActive ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
                   color: isActive ? '#111827' : '#4B5563',
                   fontWeight: isActive ? 600 : 500,
                   fontSize: '13px',
                   cursor: 'pointer',
                   textAlign: 'left',
-                  transition: 'background-color 150ms ease-out',
+                  transition: 'background-color 150ms ease',
+                  position: 'relative',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Icon size={16} strokeWidth={1.8} color={isActive ? '#111827' : '#6B7280'} />
-                  <span>{f.name}</span>
+                  <Icon size={15} strokeWidth={isActive ? 2.2 : 1.8} color={isActive ? '#111827' : '#6B7280'} />
+                  {!isCollapsed && <span style={{ whiteSpace: 'nowrap' }}>{f.name}</span>}
                 </div>
-                {f.unread > 0 && (
+
+                {!isCollapsed && f.unread > 0 && (
                   <span
                     style={{
-                      fontSize: '11px',
+                      fontSize: '10.5px',
                       fontWeight: 700,
-                      padding: '1px 6px',
-                      borderRadius: '6px',
+                      padding: '1px 5px',
+                      borderRadius: '5px',
                       backgroundColor: '#111827',
                       color: '#FFFFFF',
                     }}
@@ -128,35 +189,48 @@ export const FolderSidebar: React.FC<FolderSidebarProps> = ({
                     {f.unread}
                   </span>
                 )}
+
+                {isCollapsed && f.unread > 0 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: '5px',
+                      right: '6px',
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      backgroundColor: '#C92A2A',
+                    }}
+                  />
+                )}
               </button>
             );
           })}
         </div>
 
-        {/* Action if in Trash or Spam */}
-        {(currentFolder === 'trash' || currentFolder === 'spam') && onEmptyFolder && (
-          <div style={{ marginTop: '12px', padding: '0 8px' }}>
+        {/* Empty Trash / Spam Button */}
+        {!isCollapsed && (currentFolder === 'trash' || currentFolder === 'spam') && onEmptyFolder && (
+          <div style={{ marginTop: '10px', padding: '0 4px' }}>
             <button
               onClick={() => onEmptyFolder(currentFolder)}
               className="btn-danger"
               style={{
                 width: '100%',
-                fontSize: '12px',
-                padding: '6px 8px',
+                fontSize: '11px',
+                padding: '5px 8px',
                 justifyContent: 'center',
               }}
             >
-              <Trash2 size={13} />
+              <Trash2 size={12} />
               <span>Empty {currentFolder === 'trash' ? 'Trash' : 'Spam'}</span>
             </button>
           </div>
         )}
       </div>
 
-      {/* Storage and Test Tools Footer */}
-      <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        {/* Test Email Injection Button */}
-        {onTestDelivery && (
+      {/* Footer Storage & Test Injection */}
+      <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {!isCollapsed && onTestDelivery && (
           <button
             onClick={onTestDelivery}
             disabled={testLoading}
@@ -165,72 +239,84 @@ export const FolderSidebar: React.FC<FolderSidebarProps> = ({
               alignItems: 'center',
               justifyContent: 'center',
               gap: '6px',
-              padding: '7px 10px',
-              borderRadius: '8px',
+              padding: '6px 8px',
+              borderRadius: '6px',
               border: '1px dashed #D1D5DB',
               backgroundColor: '#FFFFFF',
               color: '#374151',
-              fontSize: '12px',
+              fontSize: '11.5px',
               fontWeight: 500,
               cursor: 'pointer',
+              whiteSpace: 'nowrap',
             }}
-            title="Inject test incoming email into this mailbox"
+            title="Inject sample test email into Inbox"
           >
-            <Sparkles size={14} color="#E67700" />
-            <span>{testLoading ? 'Injecting...' : 'Test Incoming Email'}</span>
+            <Sparkles size={13} color="#E67700" />
+            <span>{testLoading ? 'Injecting...' : 'Test Mail Injection'}</span>
           </button>
         )}
 
-        {/* Quota Progress */}
+        {/* Storage Widget */}
         {storage && (
           <div
+            title={`Disk usage: ${formatBytes(storage.bytes_used)} of ${formatBytes(storage.quota_bytes)} (${storage.quota_percent}%)`}
             style={{
-              padding: '12px 10px',
+              padding: isCollapsed ? '8px 4px' : '10px 8px',
               backgroundColor: '#FFFFFF',
-              borderRadius: '10px',
+              borderRadius: '8px',
               border: '1px solid #E5E7EB',
+              textAlign: isCollapsed ? 'center' : 'left',
             }}
           >
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '6px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', fontWeight: 600, color: '#4B5563' }}>
-                <HardDrive size={13} />
-                <span>Storage</span>
+            {isCollapsed ? (
+              <div style={{ color: quotaColor, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                <HardDrive size={14} />
+                <span style={{ fontSize: '10px', fontWeight: 700 }}>{storage.quota_percent}%</span>
               </div>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: quotaColor }}>
-                {storage.quota_percent}%
-              </span>
-            </div>
+            ) : (
+              <>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '5px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 600, color: '#4B5563' }}>
+                    <HardDrive size={12} />
+                    <span>Quota</span>
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: quotaColor }}>
+                    {storage.quota_percent}%
+                  </span>
+                </div>
 
-            <div
-              style={{
-                height: '6px',
-                backgroundColor: '#F1F3F5',
-                borderRadius: '5px',
-                overflow: 'hidden',
-                marginBottom: '6px',
-              }}
-            >
-              <div
-                style={{
-                  height: '100%',
-                  width: `${Math.min(100, storage.quota_percent)}%`,
-                  backgroundColor: quotaColor,
-                  borderRadius: '5px',
-                  transition: 'width 300ms ease',
-                }}
-              />
-            </div>
+                <div
+                  style={{
+                    height: '5px',
+                    backgroundColor: '#F1F3F5',
+                    borderRadius: '4px',
+                    overflow: 'hidden',
+                    marginBottom: '4px',
+                  }}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${Math.min(100, storage.quota_percent)}%`,
+                      backgroundColor: quotaColor,
+                      borderRadius: '4px',
+                      transition: 'width 250ms ease',
+                    }}
+                  />
+                </div>
 
-            <div style={{ fontSize: '11px', color: '#6B7280' }}>
-              {formatBytes(storage.bytes_used)} of {formatBytes(storage.quota_bytes)}
-            </div>
+                <div style={{ fontSize: '10.5px', color: '#6B7280', whiteSpace: 'nowrap' }}>
+                  {formatBytes(storage.bytes_used)} / {formatBytes(storage.quota_bytes)}
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

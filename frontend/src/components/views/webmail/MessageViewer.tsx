@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import {
   Mail, Reply, CornerUpRight, Trash2, AlertOctagon,
-  Download, Paperclip, File, Image as ImageIcon, Edit3, Zap
+  Download, Paperclip, File, Image as ImageIcon, Edit3, Zap,
+  ReplyAll
 } from 'lucide-react';
 import type { WebmailMessage } from '../../../types';
 import { api } from '../../../services/api';
@@ -11,6 +12,7 @@ interface MessageViewerProps {
   currentFolder: string;
   activeMailbox: string;
   onReply: (msg: WebmailMessage) => void;
+  onReplyAll?: (msg: WebmailMessage) => void;
   onForward: (msg: WebmailMessage) => void;
   onDelete: (msgId: string) => void;
   onMove: (msgId: string, toFolder: string) => void;
@@ -46,6 +48,7 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({
   currentFolder,
   activeMailbox,
   onReply,
+  onReplyAll,
   onForward,
   onDelete,
   onMove,
@@ -126,14 +129,27 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({
                 className="btn-secondary"
                 style={{ padding: '6px 12px', fontSize: '12px' }}
                 onClick={() => onReply(message)}
+                title="Reply to sender"
               >
                 <Reply size={14} />
                 <span>Reply</span>
               </button>
+              {onReplyAll && (
+                <button
+                  className="btn-secondary"
+                  style={{ padding: '6px 12px', fontSize: '12px' }}
+                  onClick={() => onReplyAll(message)}
+                  title="Reply to sender and all recipients"
+                >
+                  <ReplyAll size={14} />
+                  <span>Reply All</span>
+                </button>
+              )}
               <button
                 className="btn-secondary"
                 style={{ padding: '6px 12px', fontSize: '12px' }}
                 onClick={() => onForward(message)}
+                title="Forward message"
               >
                 <CornerUpRight size={14} />
                 <span>Forward</span>

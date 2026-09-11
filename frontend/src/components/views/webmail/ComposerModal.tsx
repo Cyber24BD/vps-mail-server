@@ -13,6 +13,8 @@ interface ComposerModalProps {
   onSuccess: () => void;
   activeMailbox: string;
   initialRecipient?: string;
+  initialCc?: string;
+  initialBcc?: string;
   initialSubject?: string;
   initialBodyHtml?: string;
   initialBodyText?: string;
@@ -25,15 +27,17 @@ export const ComposerModal: React.FC<ComposerModalProps> = ({
   onSuccess,
   activeMailbox,
   initialRecipient = '',
+  initialCc = '',
+  initialBcc = '',
   initialSubject = '',
   initialBodyHtml = '',
   initialBodyText = '',
   draftId,
 }) => {
   const [recipient, setRecipient] = useState(initialRecipient);
-  const [showCcBcc, setShowCcBcc] = useState(false);
-  const [cc, setCc] = useState('');
-  const [bcc, setBcc] = useState('');
+  const [showCcBcc, setShowCcBcc] = useState(Boolean(initialCc || initialBcc));
+  const [cc, setCc] = useState(initialCc);
+  const [bcc, setBcc] = useState(initialBcc);
   const [subject, setSubject] = useState(initialSubject);
   const [bodyHtml, setBodyHtml] = useState(initialBodyHtml);
   const [bodyText, setBodyText] = useState(initialBodyText);
@@ -53,14 +57,14 @@ export const ComposerModal: React.FC<ComposerModalProps> = ({
       setSubject(initialSubject);
       setBodyHtml(initialBodyHtml);
       setBodyText(initialBodyText);
-      setCc('');
-      setBcc('');
+      setCc(initialCc);
+      setBcc(initialBcc);
       setFiles([]);
       setErrorMessage(null);
       setSpamResult(null);
-      setShowCcBcc(false);
+      setShowCcBcc(Boolean(initialCc || initialBcc));
     }
-  }, [isOpen, initialRecipient, initialSubject, initialBodyHtml, initialBodyText]);
+  }, [isOpen, initialRecipient, initialCc, initialBcc, initialSubject, initialBodyHtml, initialBodyText]);
 
   const resetForm = () => {
     setRecipient('');

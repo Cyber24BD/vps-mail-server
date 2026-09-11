@@ -57,10 +57,14 @@ class UpdateService:
     @classmethod
     def apply_update(cls) -> Dict[str, Any]:
         """
-        Launches update.sh in a detached process so it doesn't block the API.
+        Launches update.sh in a detached process with automated restart.
         """
         try:
-            subprocess.Popen(["bash", "update.sh"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return {"success": True, "message": "Update process initiated in background. Microservices will rebuild."}
+            subprocess.Popen(
+                ["bash", "update.sh", "--non-interactive", "--restart-all"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            return {"success": True, "message": "Update process initiated in background. Microservices will rebuild and restart."}
         except Exception as e:
             return {"success": False, "error": str(e)}

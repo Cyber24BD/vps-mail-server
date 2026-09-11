@@ -140,16 +140,32 @@ When new code, security patches, or features are pushed to GitHub, update your s
 
 ### Method 1: The Automated 1-Click Update Script (Recommended)
 ```bash
-cd /root/vps-mail-server
+cd /root/vps-mail-server    # Or your installation directory: /var/mail-platform
 sudo ./update.sh
 ```
-**This script automatically:**
-1. Creates a safety PostgreSQL snapshot in `/var/mail-platform/backups/`.
-2. Stashes any local server file modifications to avoid Git merge conflicts.
-3. Pulls latest changes from `origin/main`.
-4. Re-synchronizes database passwords from `.env` to all mail engine configurations.
-5. Rebuilds and reloads all updated containers via `docker compose up -d --build`.
-6. Flushes Nginx internal DNS cache to ensure immediate connectivity.
+
+**What the script does:**
+1. **Safety Pre-Snapshot:** Automatically backs up PostgreSQL database to `/var/mail-platform/backups/`.
+2. **Conflict Prevention:** Safely stashes local modifications so `git pull` never fails with merge conflicts.
+3. **Repository Sync:** Pulls the latest commits from `origin/main`.
+4. **Credential Mapping:** Automatically re-maps database passwords to Postfix & Dovecot SQL configurations.
+5. **Microservice Rebuild:** Rebuilds images and starts updated containers via `docker compose up -d --build`.
+6. **Health Verification:** Verifies PostgreSQL and service health.
+7. **Interactive Post-Update Service Restart:**
+   Prompts you to re-initialize services cleanly:
+   - **`1) [Recommended] Restart EVERYTHING`**: Restarts all microservices (DB, Python Backend/Worker, Mail Servers: Postfix/Dovecot/Rspamd/ClamAV, JS Frontend, Nginx Proxy) and optionally prompts to restart the host Docker engine daemon (`systemctl restart docker`).
+   - **`2) Ask for EVERY SINGLE component individually`**: Step-by-step prompt for Mail, Python, JS, Proxy, Database, and Docker Engine.
+   - **`3-6) Targeted component restart`**: Restart only Mail services, Python servers, JS frontend, or Docker daemon.
+   - **`7) Skip restart`**: Keep current running container instances.
+8. **Live Container Summary:** Displays `docker compose ps` with live status for all containers.
+
+**Available CLI Flags:**
+```bash
+sudo ./update.sh --force          # Force rebuild even if commit hash matches
+sudo ./update.sh --restart-all    # Automatically restart everything without prompting
+sudo ./update.sh --skip-restart   # Skip service restart
+sudo ./update.sh --non-interactive # Run unattended (auto-restarts all services)
+```
 
 ### Method 2: Manual Update Sequence
 If you prefer running the commands step-by-step:

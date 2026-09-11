@@ -316,15 +316,12 @@ export const ComposerModal: React.FC<ComposerModalProps> = ({
           />
         </div>
 
-        {/* Lexical Rich Email Designer */}
+        {/* Rich Email Message Editor */}
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
             <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151' }}>
-              Message Design (Lexical Editor)
+              Message
             </label>
-            <span style={{ fontSize: '11px', color: '#6B7280' }}>
-              Rich HTML typography & custom templates
-            </span>
           </div>
           <LexicalMailEditor
             value={bodyHtml || bodyText}
@@ -333,8 +330,8 @@ export const ComposerModal: React.FC<ComposerModalProps> = ({
               setBodyText(text);
               setSpamResult(null);
             }}
-            placeholder="Compose your email message with rich styling, headings, or templates..."
-            minHeight="220px"
+            placeholder="Write your email here... Use the toolbar for rich formatting, buttons, and layout templates."
+            minHeight="240px"
           />
         </div>
 

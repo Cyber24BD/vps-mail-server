@@ -1,12 +1,20 @@
 import uuid
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import get_password_hash
+from app.models.models import StorageFile
 from app.repositories.domain_repo import DomainRepository
 from app.repositories.mailbox_repo import MailboxRepository
-from app.schemas.mailbox import MailboxCreate, MailboxUpdate, MailboxOut, QuotaUpdate
+from app.schemas.mailbox import (
+    MailboxCreate,
+    MailboxUpdate,
+    MailboxOut,
+    QuotaUpdate,
+    MailboxStorageBreakdown,
+)
 from app.services.mail_service import MailService
 from app.services.security_service import SecurityService
 from app.api.deps import get_current_admin, log_action
@@ -91,6 +99,23 @@ async def create_mailbox(
     return mailbox
 
 
+@router.post("/recalculate-all")
+async def recalculate_all_mailboxes(
+    db: AsyncSession = Depends(get_db),
+    admin = Depends(get_current_admin)
+):
+    mailbox_repo = MailboxRepository(db)
+    all_mailboxes = await mailbox_repo.list_all(limit=1000, offset=0)
+    updated_count = 0
+    for mb in all_mailboxes:
+        stats = MailService.get_mailbox_usage(mb.maildir)
+        mb.bytes_used = stats["bytes_used"]
+        mb.messages_used = stats["messages_used"]
+        updated_count += 1
+    await db.commit()
+    return {"status": "success", "updated_count": updated_count}
+
+
 @router.get("/{mailbox_id}", response_model=MailboxOut)
 async def get_mailbox(
     mailbox_id: uuid.UUID,
@@ -107,6 +132,72 @@ async def get_mailbox(
     mb.bytes_used = stats["bytes_used"]
     mb.messages_used = stats["messages_used"]
     await db.commit()
+    return mb
+
+
+@router.get("/{mailbox_id}/breakdown", response_model=MailboxStorageBreakdown)
+async def get_mailbox_storage_breakdown(
+    mailbox_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    admin = Depends(get_current_admin)
+):
+    mailbox_repo = MailboxRepository(db)
+    mb = await mailbox_repo.get_by_id(mailbox_id)
+    if not mb:
+        raise HTTPException(status_code=404, detail="Mailbox not found")
+
+    breakdown = MailService.get_mailbox_folder_breakdown(mb.maildir)
+
+    # Sync disk stats to mailbox row
+    mb.bytes_used = breakdown["total_bytes"]
+    mb.messages_used = breakdown["total_messages"]
+    await db.commit()
+
+    # Query Storage Vault files
+    vault_result = await db.execute(
+        select(
+            func.coalesce(func.sum(StorageFile.filesize), 0),
+            func.count(StorageFile.id)
+        ).where(
+            StorageFile.owner_mailbox == mb.email
+        )
+    )
+    vault_row = vault_result.first()
+    vault_bytes = int(vault_row[0]) if vault_row else 0
+    vault_files = int(vault_row[1]) if vault_row else 0
+
+    total_combined_bytes = mb.bytes_used + vault_bytes
+    percent = (total_combined_bytes / mb.quota_bytes * 100.0) if mb.quota_bytes > 0 else 0.0
+
+    return MailboxStorageBreakdown(
+        mailbox_id=mb.id,
+        email=mb.email,
+        quota_bytes=mb.quota_bytes,
+        bytes_used=total_combined_bytes,
+        messages_used=mb.messages_used,
+        percent_used=round(min(100.0, percent), 1),
+        folders=breakdown["folders"],
+        vault_bytes=vault_bytes,
+        vault_files=vault_files,
+    )
+
+
+@router.post("/{mailbox_id}/recalculate-usage", response_model=MailboxOut)
+async def recalculate_mailbox_usage(
+    mailbox_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    admin = Depends(get_current_admin)
+):
+    mailbox_repo = MailboxRepository(db)
+    mb = await mailbox_repo.get_by_id(mailbox_id)
+    if not mb:
+        raise HTTPException(status_code=404, detail="Mailbox not found")
+
+    stats = MailService.get_mailbox_usage(mb.maildir)
+    mb.bytes_used = stats["bytes_used"]
+    mb.messages_used = stats["messages_used"]
+    await db.commit()
+    await db.refresh(mb)
     return mb
 
 
@@ -132,6 +223,8 @@ async def update_mailbox(
         mb.department = mb_update.department
     if mb_update.is_active is not None:
         mb.is_active = mb_update.is_active
+    if mb_update.is_admin is not None:
+        mb.is_admin = mb_update.is_admin
     if mb_update.auto_reply_enabled is not None:
         mb.auto_reply_enabled = mb_update.auto_reply_enabled
     if mb_update.auto_reply_subject is not None:

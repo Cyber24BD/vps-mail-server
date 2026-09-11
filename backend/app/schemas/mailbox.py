@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, EmailStr, ConfigDict
 from datetime import datetime
 import uuid
@@ -20,6 +20,7 @@ class MailboxUpdate(BaseModel):
     quota_mb: Optional[int] = None
     department: Optional[str] = None
     is_active: Optional[bool] = None
+    is_admin: Optional[bool] = None
     auto_reply_enabled: Optional[bool] = None
     auto_reply_subject: Optional[str] = None
     auto_reply_body: Optional[str] = None
@@ -40,6 +41,7 @@ class MailboxOut(BaseModel):
     is_admin: bool
     auto_reply_enabled: bool
     auto_reply_subject: Optional[str] = None
+    auto_reply_body: Optional[str] = None
     signature: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -47,6 +49,24 @@ class MailboxOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-
 class QuotaUpdate(BaseModel):
     quota_mb: int
+
+
+class FolderStorageStat(BaseModel):
+    name: str
+    bytes_used: int
+    messages_count: int
+
+
+class MailboxStorageBreakdown(BaseModel):
+    mailbox_id: uuid.UUID
+    email: str
+    quota_bytes: int
+    bytes_used: int
+    messages_used: int
+    percent_used: float
+    folders: List[FolderStorageStat]
+    vault_bytes: int
+    vault_files: int
+

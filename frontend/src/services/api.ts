@@ -147,6 +147,22 @@ class ApiClient {
     return this.request<void>(`/mailboxes/${id}`, { method: 'DELETE' });
   }
 
+  async getMailboxBreakdown(id: string) {
+    return this.request<any>(`/mailboxes/${id}/breakdown`);
+  }
+
+  async recalculateMailboxUsage(id: string) {
+    return this.request<any>(`/mailboxes/${id}/recalculate-usage`, {
+      method: 'POST',
+    });
+  }
+
+  async recalculateAllMailboxesUsage() {
+    return this.request<any>('/mailboxes/recalculate-all', {
+      method: 'POST',
+    });
+  }
+
   // --- Aliases & Groups ---
   async listAliases(domainId?: string) {
     const url = domainId ? `/aliases/?domain_id=${domainId}` : '/aliases/';

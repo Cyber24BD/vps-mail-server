@@ -40,8 +40,28 @@ export interface Mailbox {
   is_admin: boolean;
   auto_reply_enabled: boolean;
   auto_reply_subject?: string | null;
+  auto_reply_body?: string | null;
   signature?: string | null;
   created_at: string;
+  updated_at?: string;
+}
+
+export interface FolderStorageStat {
+  name: string;
+  bytes_used: number;
+  messages_count: number;
+}
+
+export interface MailboxStorageBreakdown {
+  mailbox_id: string;
+  email: string;
+  quota_bytes: number;
+  bytes_used: number;
+  messages_used: number;
+  percent_used: number;
+  folders: FolderStorageStat[];
+  vault_bytes: number;
+  vault_files: number;
 }
 
 export interface Alias {

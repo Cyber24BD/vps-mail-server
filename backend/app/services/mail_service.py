@@ -65,6 +65,68 @@ class MailService:
         return {"bytes_used": total_bytes, "messages_used": total_messages}
 
     @staticmethod
+    def get_mailbox_folder_breakdown(maildir_relative: str) -> Dict[str, Any]:
+        """
+        Calculates disk usage and message counts broken down by Maildir folders:
+        Inbox (cur/new), Sent (.Sent), Trash (.Trash), Junk/Spam (.Junk/.Spam), Drafts (.Drafts), Other.
+        """
+        full_path = os.path.join(settings.VMAIL_DIR, maildir_relative)
+        folders_map: Dict[str, Dict[str, int]] = {
+            "Inbox": {"bytes_used": 0, "messages_count": 0},
+            "Sent": {"bytes_used": 0, "messages_count": 0},
+            "Trash": {"bytes_used": 0, "messages_count": 0},
+            "Junk": {"bytes_used": 0, "messages_count": 0},
+            "Drafts": {"bytes_used": 0, "messages_count": 0},
+            "Archive / Other": {"bytes_used": 0, "messages_count": 0},
+        }
+
+        if not os.path.exists(full_path):
+            return {
+                "total_bytes": 0,
+                "total_messages": 0,
+                "folders": [{"name": k, **v} for k, v in folders_map.items()]
+            }
+
+        total_bytes = 0
+        total_messages = 0
+
+        try:
+            for entry in os.scandir(full_path):
+                if entry.is_dir():
+                    folder_name = entry.name
+                    target_category = "Archive / Other"
+                    if folder_name in ("cur", "new", "tmp"):
+                        target_category = "Inbox"
+                    elif folder_name in (".Sent", ".Sent Items", "Sent"):
+                        target_category = "Sent"
+                    elif folder_name in (".Trash", "Trash"):
+                        target_category = "Trash"
+                    elif folder_name in (".Junk", ".Spam", "Junk", "Spam"):
+                        target_category = "Junk"
+                    elif folder_name in (".Drafts", "Drafts"):
+                        target_category = "Drafts"
+
+                    for sub_root, _, sub_files in os.walk(entry.path):
+                        for f in sub_files:
+                            fp = os.path.join(sub_root, f)
+                            try:
+                                sz = os.path.getsize(fp)
+                                folders_map[target_category]["bytes_used"] += sz
+                                folders_map[target_category]["messages_count"] += 1
+                                total_bytes += sz
+                                total_messages += 1
+                            except OSError:
+                                pass
+        except Exception:
+            pass
+
+        return {
+            "total_bytes": total_bytes,
+            "total_messages": total_messages,
+            "folders": [{"name": k, **v} for k, v in folders_map.items()]
+        }
+
+    @staticmethod
     def get_mail_queue_stats() -> Dict[str, Any]:
         """
         Reads Postfix mail queue statistics.

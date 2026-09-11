@@ -202,3 +202,64 @@ async def test_storage_api_endpoints():
             assert "total" in data_files
     finally:
         app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.mark.asyncio
+async def test_validate_safe_vault_path_rules(temp_storage_env):
+    user_email = "it@toamun.com"
+    vault_dir = StorageVaultService.get_user_storage_dir(user_email)
+    test_uuid = uuid.uuid4()
+
+    valid_file = os.path.join(vault_dir, f"{test_uuid.hex}_annual_plan.pdf")
+    with open(valid_file, "w") as f:
+        f.write("content")
+
+    # 1. Valid file in jail -> Passes
+    is_safe, reason = StorageVaultService.validate_safe_vault_path(valid_file, user_email, test_uuid.hex)
+    assert is_safe is True
+    assert reason == ""
+
+    # 2. Path escaping vault (e.g. /etc/hosts or ..) -> Blocked
+    escaped_file = os.path.join(vault_dir, "..", "passwords.txt")
+    is_safe, reason = StorageVaultService.validate_safe_vault_path(escaped_file, user_email, test_uuid.hex)
+    assert is_safe is False
+    assert "escapes" in reason
+
+    # 3. Path pointing to vault root itself -> Blocked
+    is_safe, reason = StorageVaultService.validate_safe_vault_path(vault_dir, user_email, test_uuid.hex)
+    assert is_safe is False
+
+    # 4. Wrong UUID prefix on disk -> Blocked
+    wrong_uuid = uuid.uuid4()
+    is_safe, reason = StorageVaultService.validate_safe_vault_path(valid_file, user_email, wrong_uuid.hex)
+    assert is_safe is False
+    assert "identifier" in reason
+
+
+@pytest.mark.asyncio
+async def test_dangerous_unlinking_blocked_by_guard(temp_storage_env):
+    mock_db = AsyncMock()
+    mock_db.add = MagicMock()
+    mock_db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+
+    # Create a malicious StorageFile entry pointing to /etc/shadow or parent
+    malicious_id = uuid.uuid4()
+    malicious_record = MagicMock(spec=StorageFile)
+    malicious_record.id = malicious_id
+    malicious_record.owner_mailbox = "it@toamun.com"
+    malicious_record.file_path = "/etc/shadow"
+    malicious_record.filesize = 100
+
+    mock_db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=malicious_record))
+
+    success, msg = await StorageVaultService.delete_file(
+        file_id=malicious_id,
+        requesting_mailbox="it@toamun.com",
+        is_admin=True,
+        db=mock_db
+    )
+
+    # Must be intercepted and blocked!
+    assert success is False
+    assert "Refused dangerous disk operation" in msg
+

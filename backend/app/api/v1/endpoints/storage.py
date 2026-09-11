@@ -86,6 +86,14 @@ async def preview_storage_file(
             detail="The file content was deleted from storage to reclaim space"
         )
 
+    is_safe, reason = StorageVaultService.validate_safe_vault_path(
+        file_path=file_record.file_path,
+        owner_mailbox=file_record.owner_mailbox,
+        expected_uuid_hex=file_record.id.hex
+    )
+    if not is_safe:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Access denied: {reason}")
+
     safe_name = file_record.filename.replace('"', '')
     return FileResponse(
         path=file_record.file_path,
@@ -128,6 +136,14 @@ async def download_storage_file(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="The file content was deleted from storage to reclaim space"
         )
+
+    is_safe, reason = StorageVaultService.validate_safe_vault_path(
+        file_path=file_record.file_path,
+        owner_mailbox=file_record.owner_mailbox,
+        expected_uuid_hex=file_record.id.hex
+    )
+    if not is_safe:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Access denied: {reason}")
 
     return FileResponse(
         path=file_record.file_path,

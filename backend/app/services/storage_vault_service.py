@@ -63,6 +63,49 @@ class StorageVaultService:
         return storage_dir
 
     @classmethod
+    def validate_safe_vault_path(
+        cls,
+        file_path: str,
+        owner_mailbox: str,
+        expected_uuid_hex: Optional[str] = None
+    ) -> Tuple[bool, str]:
+        """
+        Ultra-strict security verification ensuring a file operation is safely
+        jailed inside the user's storage vault and cannot harm the VPS or mail system.
+        """
+        if not file_path or not isinstance(file_path, str):
+            return False, "File path is empty or invalid"
+
+        # 1. Resolve jail directory
+        expected_dir = os.path.realpath(cls.get_user_storage_dir(owner_mailbox))
+        real_target = os.path.realpath(file_path)
+
+        # 2. Check Jail Containment: target must be inside expected_dir
+        try:
+            common = os.path.commonpath([real_target, expected_dir])
+            if common != expected_dir or real_target == expected_dir:
+                return False, "Security error: File path escapes user storage jail"
+        except Exception:
+            return False, "Security error: Path resolution failed"
+
+        # 3. Reject symlinks (never follow or delete symlinks)
+        if os.path.islink(file_path) or os.path.islink(real_target):
+            return False, "Security error: Symlinks are forbidden in storage vault"
+
+        # 4. Must be a regular file if it exists (never a directory, device, or socket)
+        if os.path.exists(real_target) and not os.path.isfile(real_target):
+            return False, "Security error: Target path is not a regular file"
+
+        # 5. Filename structure validation
+        filename = os.path.basename(real_target)
+        if expected_uuid_hex:
+            if not filename.startswith(f"{expected_uuid_hex}_"):
+                return False, "Security error: File does not match registered vault identifier"
+
+        return True, ""
+
+
+    @classmethod
     async def store_attachment(
         cls,
         sender_mailbox: str,
@@ -235,12 +278,21 @@ class StorageVaultService:
         if not is_admin and file_record.owner_mailbox.lower() != clean_requester:
             return False, "Permission denied: Only the owner can delete this file"
 
-        # Physically remove from disk
-        if file_record.file_path and os.path.exists(file_record.file_path):
-            try:
-                os.remove(file_record.file_path)
-            except Exception:
-                pass
+        # Physically remove from disk with strict jail & safety validation
+        if file_record.file_path:
+            is_safe, reason = cls.validate_safe_vault_path(
+                file_path=file_record.file_path,
+                owner_mailbox=file_record.owner_mailbox,
+                expected_uuid_hex=parsed_id.hex
+            )
+            if not is_safe:
+                return False, f"Refused dangerous disk operation: {reason}"
+
+            if os.path.exists(file_record.file_path):
+                try:
+                    os.remove(file_record.file_path)
+                except OSError:
+                    pass
 
         file_size = file_record.filesize or 0
         owner_email = file_record.owner_mailbox

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Mail, Reply, CornerUpRight, Trash2, AlertOctagon,
-  Download, Paperclip, File, Image as ImageIcon, Edit3
+  Download, Paperclip, File, Image as ImageIcon, Edit3, Zap
 } from 'lucide-react';
 import type { WebmailMessage } from '../../../types';
 import { api } from '../../../services/api';
@@ -200,9 +200,32 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({
 
       {/* Message Header */}
       <div style={{ padding: '24px 28px', borderBottom: '1px solid #F1F3F5' }}>
-        <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: '0 0 16px 0', lineHeight: 1.4 }}>
-          {message.subject}
-        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0, lineHeight: 1.4 }}>
+            {message.subject}
+          </h1>
+          {message.is_internal && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                backgroundColor: '#EFF6FF',
+                color: '#1D4ED8',
+                border: '1px solid #BFDBFE',
+                borderRadius: '6px',
+                padding: '3px 10px',
+                fontSize: '11px',
+                fontWeight: 600,
+                flexShrink: 0,
+              }}
+              title="Delivered directly within the organization via instant fast-path"
+            >
+              <Zap size={13} />
+              Direct Company Message
+            </span>
+          )}
+        </div>
 
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

@@ -1,7 +1,7 @@
 import os
 import shutil
 import tempfile
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 import pytest
 from httpx import AsyncClient, ASGITransport
 from app.main import app
@@ -19,9 +19,11 @@ def temp_vmail(monkeypatch):
     # Mock get_db to prevent connecting to PostgreSQL during standalone test runs
     async def override_get_db():
         mock_session = AsyncMock()
-        mock_result = AsyncMock()
-        mock_result.scalar_one_or_none = AsyncMock(return_value=None)
-        mock_result.scalars = AsyncMock(return_value=AsyncMock(all=AsyncMock(return_value=[])))
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = []
+        mock_result.scalars.return_value = mock_scalars
         mock_session.execute = AsyncMock(return_value=mock_result)
         mock_session.commit = AsyncMock()
         yield mock_session

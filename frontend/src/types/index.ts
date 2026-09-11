@@ -109,6 +109,7 @@ export interface WebmailMessage {
   date: string;
   is_read: boolean;
   is_starred: boolean;
+  is_internal?: boolean;
   has_attachment: boolean;
   attachments?: WebmailAttachment[];
 }

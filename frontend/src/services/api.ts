@@ -328,6 +328,32 @@ class ApiClient {
   async applyUpdate() {
     return this.request<any>('/updates/apply', { method: 'POST' });
   }
+
+  // --- System Settings & Routing Policies ---
+  async getInternalMessagingSetting() {
+    return this.request<{
+      enabled: boolean;
+      same_domain_only: boolean;
+      stamp_internal_header: boolean;
+      description?: string;
+    }>('/settings/internal-messaging');
+  }
+
+  async updateInternalMessagingSetting(data: {
+    enabled: boolean;
+    same_domain_only?: boolean;
+    stamp_internal_header?: boolean;
+  }) {
+    return this.request<{
+      enabled: boolean;
+      same_domain_only: boolean;
+      stamp_internal_header: boolean;
+      description?: string;
+    }>('/settings/internal-messaging', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 

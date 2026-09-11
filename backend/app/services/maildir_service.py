@@ -315,6 +315,10 @@ class MaildirService:
                 is_in_new = "/new" in fp.replace("\\", "/")
                 is_read = (not is_in_new) and has_flag(fn, "S")
                 is_starred = has_flag(fn, "F")
+                is_internal = (
+                    msg.get("X-CorpMail-Delivery") == "Internal-Direct" or
+                    msg.get("X-CorpMail-Internal") == "true"
+                )
 
                 if search_lower:
                     searchable = f"{sender} {subject} {snippet} {recipient}".lower()
@@ -331,6 +335,7 @@ class MaildirService:
                     "date": date_val.isoformat(),
                     "is_read": is_read,
                     "is_starred": is_starred,
+                    "is_internal": is_internal,
                     "has_attachment": has_attachment
                 })
             except Exception:
@@ -460,6 +465,10 @@ class MaildirService:
             "attachments": attachments,
             "date": date_val.isoformat(),
             "is_read": True,
+            "is_internal": (
+                msg.get("X-CorpMail-Delivery") == "Internal-Direct" or
+                msg.get("X-CorpMail-Internal") == "true"
+            ),
             "has_attachment": len(attachments) > 0
         }
 

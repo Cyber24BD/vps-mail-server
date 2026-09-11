@@ -25,6 +25,7 @@ from app.services.maildir_service import (
     MaildirService, register_event_listener, unregister_event_listener
 )
 from app.services.spam_service import SpamService
+from app.services.routing_service import MessageRoutingService
 
 router = APIRouter()
 
@@ -429,6 +430,21 @@ async def send_email(
                 filename=upload.filename
             )
 
+    # Classify delivery path via modular MessageRoutingService
+    all_recipients = [recipient.strip().lower()]
+    if cc:
+        all_recipients.extend([c.strip().lower() for c in cc.split(",") if c.strip()])
+
+    routing_plan = await MessageRoutingService.classify_and_route(
+        sender_email=active_mb,
+        recipients=all_recipients,
+        db=db
+    )
+
+    # Stamp internal provenance headers if internal delivery applies
+    if routing_plan.internal_recipients:
+        MessageRoutingService.stamp_internal_headers(msg, active_mb)
+
     raw_mime = msg.as_bytes()
 
     # 3. Save directly to Sender's Sent folder
@@ -439,32 +455,23 @@ async def send_email(
         is_read=True
     )
 
-    # 4. Check if recipient is a local mailbox on the platform (instant local delivery)
-    recipients_to_deliver = [recipient.strip().lower()]
-    if cc:
-        recipients_to_deliver.extend([c.strip().lower() for c in cc.split(",") if c.strip()])
-
-    for rec_addr in recipients_to_deliver:
+    # 4. Instant Fast-Path Delivery for internal domain recipients (< 5ms)
+    for internal_addr in routing_plan.internal_recipients:
         try:
-            stmt = select(Mailbox).where(Mailbox.email == rec_addr)
-            res = await db.execute(stmt)
-            local_mb = res.scalar_one_or_none()
-            if local_mb:
-                MaildirService.save_message(
-                    mailbox_email=rec_addr,
-                    folder_key="inbox",
-                    raw_mime_bytes=raw_mime,
-                    is_read=False
-                )
+            MaildirService.save_message(
+                mailbox_email=internal_addr,
+                folder_key="inbox",
+                raw_mime_bytes=raw_mime,
+                is_read=False
+            )
         except Exception:
-            if "@" in rec_addr:
-                MaildirService.save_message(rec_addr, "inbox", raw_mime, is_read=False)
+            pass
 
-    # 5. Dispatch via Postfix SMTP for external recipients
+    # 5. Dispatch via Postfix SMTP ONLY if external internet recipients exist
     smtp_dispatched = False
-    if getattr(settings, "ENVIRONMENT", "") != "test":
+    if routing_plan.external_recipients and getattr(settings, "ENVIRONMENT", "") != "test":
         try:
-            with smtplib.SMTP("postfix", 25, timeout=1) as server:
+            with smtplib.SMTP("postfix", 25, timeout=2) as server:
                 server.send_message(msg)
                 smtp_dispatched = True
         except Exception:
@@ -479,7 +486,14 @@ async def send_email(
 
     return {
         "success": True,
-        "message": "Email dispatched successfully and saved to Sent folder.",
+        "message": (
+            "Internal direct message delivered instantly."
+            if routing_plan.is_pure_internal
+            else "Email dispatched successfully and saved to Sent folder."
+        ),
+        "delivery_mode": routing_plan.delivery_mode,
+        "internal_recipients": routing_plan.internal_recipients,
+        "external_recipients": routing_plan.external_recipients,
         "spam_score": spam_eval["score"],
         "smtp_dispatched": smtp_dispatched
     }
@@ -522,25 +536,45 @@ async def send_email_json(
     if req.body_html:
         msg.add_alternative(req.body_html, subtype="html")
 
+    # Classify delivery path via modular MessageRoutingService
+    all_recipients = [req.recipient.strip().lower()]
+    if req.cc:
+        all_recipients.extend([c.strip().lower() for c in req.cc.split(",") if c.strip()])
+
+    routing_plan = await MessageRoutingService.classify_and_route(
+        sender_email=active_mb,
+        recipients=all_recipients,
+        db=db
+    )
+
+    # Stamp internal provenance headers if internal delivery applies
+    if routing_plan.internal_recipients:
+        MessageRoutingService.stamp_internal_headers(msg, active_mb)
+
     raw_mime = msg.as_bytes()
 
     # Save to Sent
     MaildirService.save_message(active_mb, "sent", raw_mime, is_read=True)
 
-    # Local delivery check
-    try:
-        stmt = select(Mailbox).where(Mailbox.email == req.recipient.strip().lower())
-        res = await db.execute(stmt)
-        if res.scalar_one_or_none():
-            MaildirService.save_message(req.recipient.strip().lower(), "inbox", raw_mime, is_read=False)
-    except Exception:
-        if "@" in req.recipient:
-            MaildirService.save_message(req.recipient.strip().lower(), "inbox", raw_mime, is_read=False)
-
-    if getattr(settings, "ENVIRONMENT", "") != "test":
+    # Instant Fast-Path Delivery for internal domain recipients (< 5ms)
+    for internal_addr in routing_plan.internal_recipients:
         try:
-            with smtplib.SMTP("postfix", 25, timeout=1) as server:
+            MaildirService.save_message(
+                mailbox_email=internal_addr,
+                folder_key="inbox",
+                raw_mime_bytes=raw_mime,
+                is_read=False
+            )
+        except Exception:
+            pass
+
+    # Dispatch via Postfix SMTP ONLY if external internet recipients exist
+    smtp_dispatched = False
+    if routing_plan.external_recipients and getattr(settings, "ENVIRONMENT", "") != "test":
+        try:
+            with smtplib.SMTP("postfix", 25, timeout=2) as server:
                 server.send_message(msg)
+                smtp_dispatched = True
         except Exception:
             pass
 
@@ -553,8 +587,16 @@ async def send_email_json(
 
     return {
         "success": True,
-        "message": "Email dispatched successfully and saved to Sent folder.",
-        "spam_score": spam_eval["score"]
+        "message": (
+            "Internal direct message delivered instantly."
+            if routing_plan.is_pure_internal
+            else "Email dispatched successfully and saved to Sent folder."
+        ),
+        "delivery_mode": routing_plan.delivery_mode,
+        "internal_recipients": routing_plan.internal_recipients,
+        "external_recipients": routing_plan.external_recipients,
+        "spam_score": spam_eval["score"],
+        "smtp_dispatched": smtp_dispatched
     }
 
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Search, CheckSquare, Square, Trash2,
-  MailCheck, Mail, AlertOctagon, Paperclip
+  MailCheck, Mail, AlertOctagon, Paperclip, Zap
 } from 'lucide-react';
 import type { WebmailMessage } from '../../../types';
 
@@ -228,6 +228,27 @@ export const MailListView: React.FC<MailListViewProps> = ({
                     {currentFolder === 'drafts' && (
                       <span style={{ padding: '1px 5px', fontSize: '10px', borderRadius: '4px', backgroundColor: '#FFF9DB', border: '1px solid #E67700', color: '#A65D03', fontWeight: 700, flexShrink: 0 }}>
                         DRAFT
+                      </span>
+                    )}
+                    {m.is_internal && (
+                      <span
+                        style={{
+                          padding: '1px 5px',
+                          fontSize: '10px',
+                          borderRadius: '4px',
+                          backgroundColor: '#EFF6FF',
+                          border: '1px solid #BFDBFE',
+                          color: '#1D4ED8',
+                          fontWeight: 600,
+                          flexShrink: 0,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '2px',
+                        }}
+                        title="Direct Company Message"
+                      >
+                        <Zap size={10} />
+                        DIRECT
                       </span>
                     )}
                     <span

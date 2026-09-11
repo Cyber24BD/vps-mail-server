@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   Activity,
   HardDrive,
+  Sliders,
 } from 'lucide-react';
 
 export type NavTab =
@@ -18,7 +19,8 @@ export type NavTab =
   | 'aliases'
   | 'webmail'
   | 'security'
-  | 'diagnostics';
+  | 'diagnostics'
+  | 'settings';
 
 interface NavItem {
   id: NavTab;
@@ -50,6 +52,7 @@ export const SidebarCard: React.FC<SidebarCardProps> = ({
     { id: 'webmail', label: 'Custom Webmail', icon: Mail },
     { id: 'security', label: 'Security & SSL', icon: ShieldCheck },
     { id: 'diagnostics', label: 'Diagnostics & Logs', icon: Activity },
+    { id: 'settings', label: 'System Settings', icon: Sliders },
   ];
 
   const navItems = userRole === 'user'

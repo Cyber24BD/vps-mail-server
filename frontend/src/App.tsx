@@ -8,6 +8,7 @@ import { AliasesView } from './components/views/AliasesView';
 import { WebmailView } from './components/views/WebmailView';
 import { SecurityView } from './components/views/SecurityView';
 import { DiagnosticsView } from './components/views/DiagnosticsView';
+import { SettingsView } from './components/views/SettingsView';
 import { SetupWizardView } from './components/views/SetupWizardView';
 import { SkeletonCard } from './components/common/SkeletonCard';
 import { api } from './services/api';
@@ -196,6 +197,7 @@ export const App: React.FC = () => {
               {currentTab === 'webmail' && <WebmailView />}
               {currentTab === 'security' && <SecurityView />}
               {currentTab === 'diagnostics' && <DiagnosticsView />}
+              {currentTab === 'settings' && <SettingsView />}
             </>
           )}
         </section>

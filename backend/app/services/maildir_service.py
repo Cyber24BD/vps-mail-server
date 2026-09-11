@@ -5,10 +5,36 @@ import uuid
 import email
 from email.policy import default
 from email.message import EmailMessage
+from email.header import decode_header, make_header
 from datetime import datetime, timezone
 import asyncio
 from typing import Dict, Any, List, Optional, Tuple
 from app.core.config import settings
+
+
+def decode_mime_header(val: Any) -> str:
+    """
+    Decodes RFC 2047 MIME encoded words (e.g. =?UTF-8?B?...?= or =?ISO-8859-1?Q?...?=)
+    into clean, human-readable Unicode text.
+    """
+    if not val:
+        return ""
+    val_str = str(val).strip()
+    try:
+        chunks = decode_header(val_str)
+        parts = []
+        for text, charset in chunks:
+            if isinstance(text, bytes):
+                enc = charset or "utf-8"
+                try:
+                    parts.append(text.decode(enc, errors="replace"))
+                except (LookupError, UnicodeDecodeError):
+                    parts.append(text.decode("latin1", errors="replace"))
+            else:
+                parts.append(str(text))
+        return " ".join("".join(parts).split())
+    except Exception:
+        return val_str
 
 
 # In-memory event queues for real-time SSE updates
@@ -250,9 +276,9 @@ class MaildirService:
                 with open(fp, "rb") as f:
                     msg = email.message_from_binary_file(f, policy=default)
 
-                sender = msg.get("from", "Unknown Sender")
-                recipient = msg.get("to", mailbox_email)
-                subject = msg.get("subject", "(No Subject)")
+                sender = decode_mime_header(msg.get("from")) or "Unknown Sender"
+                recipient = decode_mime_header(msg.get("to")) or mailbox_email
+                subject = decode_mime_header(msg.get("subject")) or "(No Subject)"
                 date_str = msg.get("date")
 
                 try:
@@ -424,10 +450,10 @@ class MaildirService:
         return {
             "id": new_id,
             "folder": folder_key,
-            "sender": msg.get("from", "Unknown Sender"),
-            "recipient": msg.get("to", mailbox_email),
-            "cc": msg.get("cc", ""),
-            "subject": msg.get("subject", "(No Subject)"),
+            "sender": decode_mime_header(msg.get("from")) or "Unknown Sender",
+            "recipient": decode_mime_header(msg.get("to")) or mailbox_email,
+            "cc": decode_mime_header(msg.get("cc")) or "",
+            "subject": decode_mime_header(msg.get("subject")) or "(No Subject)",
             "snippet": (body_text or body_html)[:120],
             "body_text": body_text,
             "body_html": body_html,
@@ -507,8 +533,67 @@ class MaildirService:
             except Exception:
                 pass
 
-        broadcast_mailbox_event(mailbox_email, "new_mail", {"folder": folder_key, "message_id": filename})
+        # Extract subject and sender for rich real-time UI notification
+        evt_subject = "(No Subject)"
+        evt_sender = mailbox_email
+        try:
+            parsed_tmp = email.message_from_bytes(raw_mime_bytes, policy=default)
+            evt_subject = decode_mime_header(parsed_tmp.get("subject")) or "(No Subject)"
+            evt_sender = decode_mime_header(parsed_tmp.get("from")) or mailbox_email
+        except Exception:
+            pass
+
+        broadcast_mailbox_event(mailbox_email, "new_mail", {
+            "folder": folder_key,
+            "message_id": filename,
+            "subject": evt_subject,
+            "sender": evt_sender,
+            "date": datetime.now(timezone.utc).isoformat()
+        })
         return filename
+
+    @classmethod
+    def save_draft(
+        cls,
+        mailbox_email: str,
+        recipient: str,
+        subject: str,
+        body_text: str,
+        body_html: Optional[str] = None,
+        cc: Optional[str] = None,
+        bcc: Optional[str] = None,
+        draft_id: Optional[str] = None
+    ) -> str:
+        """
+        Saves or replaces a draft in the Drafts folder.
+        If draft_id is provided, the previous draft message is cleanly removed.
+        """
+        if draft_id:
+            try:
+                cls.delete_message(mailbox_email, "drafts", draft_id)
+            except Exception:
+                pass
+
+        msg = EmailMessage()
+        msg["From"] = mailbox_email
+        msg["To"] = recipient.strip() if recipient else ""
+        if cc and cc.strip():
+            msg["Cc"] = cc.strip()
+        if bcc and bcc.strip():
+            msg["Bcc"] = bcc.strip()
+        msg["Subject"] = subject.strip() if subject else "(Draft)"
+        msg["Date"] = email.utils.formatdate(localtime=True)
+
+        msg.set_content(body_text or "")
+        if body_html:
+            msg.add_alternative(body_html, subtype="html")
+
+        return cls.save_message(
+            mailbox_email=mailbox_email,
+            folder_key="drafts",
+            raw_mime_bytes=msg.as_bytes(),
+            is_read=True
+        )
 
     @classmethod
     def move_message(

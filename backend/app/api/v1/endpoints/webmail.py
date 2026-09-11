@@ -106,6 +106,18 @@ class SendEmailJsonRequest(BaseModel):
     body_text: str
     body_html: Optional[str] = None
     mailbox: Optional[str] = None
+    draft_id: Optional[str] = None
+
+
+class SaveDraftRequest(BaseModel):
+    recipient: Optional[str] = ""
+    cc: Optional[str] = None
+    bcc: Optional[str] = None
+    subject: Optional[str] = ""
+    body_text: Optional[str] = ""
+    body_html: Optional[str] = None
+    mailbox: Optional[str] = None
+    draft_id: Optional[str] = None
 
 
 # -------------------------------------------------------------------------
@@ -362,6 +374,7 @@ async def send_email(
     cc: Optional[str] = Form(None),
     bcc: Optional[str] = Form(None),
     mailbox: Optional[str] = Form(None),
+    draft_id: Optional[str] = Form(None),
     files: List[UploadFile] = File([]),
     user_ctx: Dict[str, Any] = Depends(get_current_user_context),
     db: AsyncSession = Depends(get_db)
@@ -457,6 +470,13 @@ async def send_email(
         except Exception:
             pass
 
+    # 6. If this message was sent from an existing draft, cleanly remove the draft
+    if draft_id:
+        try:
+            MaildirService.delete_message(mailbox_email=active_mb, folder_key="drafts", message_id=draft_id)
+        except Exception:
+            pass
+
     return {
         "success": True,
         "message": "Email dispatched successfully and saved to Sent folder.",
@@ -524,11 +544,41 @@ async def send_email_json(
         except Exception:
             pass
 
+    # Cleanly remove draft if sent from Drafts
+    if req.draft_id:
+        try:
+            MaildirService.delete_message(mailbox_email=active_mb, folder_key="drafts", message_id=req.draft_id)
+        except Exception:
+            pass
+
     return {
         "success": True,
         "message": "Email dispatched successfully and saved to Sent folder.",
         "spam_score": spam_eval["score"]
     }
+
+
+@router.post("/drafts/save")
+async def save_draft_endpoint(
+    req: SaveDraftRequest,
+    user_ctx: Dict[str, Any] = Depends(get_current_user_context),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Saves or replaces a draft in the Drafts folder.
+    """
+    active_mb = await resolve_active_mailbox(user_ctx, req.mailbox, db)
+    mid = MaildirService.save_draft(
+        mailbox_email=active_mb,
+        recipient=req.recipient or "",
+        subject=req.subject or "",
+        body_text=req.body_text or "",
+        body_html=req.body_html,
+        cc=req.cc,
+        bcc=req.bcc,
+        draft_id=req.draft_id
+    )
+    return {"success": True, "message_id": mid, "message": "Draft saved successfully"}
 
 
 @router.post("/messages/{message_id}/move")

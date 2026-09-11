@@ -27,12 +27,13 @@ export const WebmailView: React.FC = () => {
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Composer reply/forward initial state
+  // Composer reply/forward/draft initial state
   const [composerState, setComposerState] = useState<{
     recipient: string;
     subject: string;
     bodyHtml: string;
     bodyText: string;
+    draftId?: string;
   }>({ recipient: '', subject: '', bodyHtml: '', bodyText: '' });
 
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -71,15 +72,22 @@ export const WebmailView: React.FC = () => {
     }
   }, []);
 
-  // 3. Fetch messages for folder
-  const loadMessages = useCallback(async (folder: string, mb: string, search?: string) => {
+  // 3. Fetch messages for folder and auto-load message details
+  const loadMessages = useCallback(async (folder: string, mb: string, search?: string, targetId?: string) => {
     try {
       const mList = await api.getWebmailMessages(folder, mb, search);
       setMessages(mList);
       setSelectedIds(new Set());
-      // If selected message is still in list, keep it, else select first
       if (mList.length > 0) {
-        setSelectedMessage(mList[0]);
+        const target = targetId
+          ? mList.find((m) => m.id === targetId) || mList[0]
+          : mList[0];
+        try {
+          const detail = await api.getWebmailMessage(target.id, folder, mb);
+          setSelectedMessage(detail);
+        } catch {
+          setSelectedMessage(target);
+        }
       } else {
         setSelectedMessage(null);
       }
@@ -121,7 +129,9 @@ export const WebmailView: React.FC = () => {
       es.addEventListener('new_mail', (e: any) => {
         try {
           const data = JSON.parse(e.data);
-          showToast(`New email received in ${data.folder || 'Inbox'}`);
+          const subj = data.subject || 'New Message';
+          const senderInfo = data.sender ? ` from ${data.sender}` : '';
+          showToast(`📩 New email${senderInfo}: "${subj}"`);
           loadFolders(activeMailbox);
           if (currentFolder === 'inbox' || currentFolder === data.folder) {
             loadMessages(currentFolder, activeMailbox, searchQuery);
@@ -281,6 +291,18 @@ export const WebmailView: React.FC = () => {
       subject: msg.subject.startsWith('Fwd:') ? msg.subject : `Fwd: ${msg.subject}`,
       bodyHtml: `<p></p><hr/><p><strong>---------- Forwarded message ---------</strong><br/><strong>From:</strong> ${msg.sender}<br/><strong>Subject:</strong> ${msg.subject}<br/><strong>Date:</strong> ${msg.date}</p>${msg.body_html || msg.body_text || ''}`,
       bodyText: `\n\n---------- Forwarded message ---------\nFrom: ${msg.sender}\nSubject: ${msg.subject}\nDate: ${msg.date}\n\n${msg.body_text || msg.snippet}`,
+      draftId: undefined,
+    });
+    setIsComposeOpen(true);
+  };
+
+  const handleEditDraft = (msg: WebmailMessage) => {
+    setComposerState({
+      recipient: msg.recipient || '',
+      subject: msg.subject || '',
+      bodyHtml: msg.body_html || '',
+      bodyText: msg.body_text || msg.snippet || '',
+      draftId: msg.id,
     });
     setIsComposeOpen(true);
   };
@@ -448,7 +470,7 @@ export const WebmailView: React.FC = () => {
             type="button"
             className="btn-primary"
             onClick={() => {
-              setComposerState({ recipient: '', subject: '', bodyHtml: '', bodyText: '' });
+              setComposerState({ recipient: '', subject: '', bodyHtml: '', bodyText: '', draftId: undefined });
               setIsComposeOpen(true);
             }}
           >
@@ -507,18 +529,23 @@ export const WebmailView: React.FC = () => {
           onMove={handleMoveMessage}
           onMarkSpam={handleMarkSpam}
           onMarkHam={handleMarkHam}
+          onEditDraft={handleEditDraft}
         />
       </div>
 
-      {/* Modern Compose Modal */}
+      {/* Modern Lexical Compose Modal */}
       <ComposerModal
         isOpen={isComposeOpen}
-        onClose={() => setIsComposeOpen(false)}
+        onClose={() => {
+          setIsComposeOpen(false);
+          setComposerState({ recipient: '', subject: '', bodyHtml: '', bodyText: '', draftId: undefined });
+        }}
         onSuccess={() => {
           showToast('Email dispatched to SMTP queue and saved to Sent folder.');
+          setComposerState({ recipient: '', subject: '', bodyHtml: '', bodyText: '', draftId: undefined });
           loadFolders(activeMailbox);
-          if (currentFolder === 'sent') {
-            loadMessages('sent', activeMailbox, searchQuery);
+          if (currentFolder === 'sent' || currentFolder === 'drafts') {
+            loadMessages(currentFolder, activeMailbox, searchQuery);
           }
         }}
         activeMailbox={activeMailbox}
@@ -526,6 +553,7 @@ export const WebmailView: React.FC = () => {
         initialSubject={composerState.subject}
         initialBodyHtml={composerState.bodyHtml}
         initialBodyText={composerState.bodyText}
+        draftId={composerState.draftId}
       />
     </div>
   );

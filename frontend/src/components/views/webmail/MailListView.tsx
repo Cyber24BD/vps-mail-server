@@ -212,7 +212,7 @@ export const MailListView: React.FC<MailListViewProps> = ({
                   transition: 'background-color 100ms ease',
                 }}
               >
-                {/* Row 1: Checkbox, Sender, Date */}
+                {/* Row 1: Checkbox, Sender/Recipient, Date */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
                     <div
@@ -225,6 +225,11 @@ export const MailListView: React.FC<MailListViewProps> = ({
                         <Square size={14} color="#D1D5DB" />
                       )}
                     </div>
+                    {currentFolder === 'drafts' && (
+                      <span style={{ padding: '1px 5px', fontSize: '10px', borderRadius: '4px', backgroundColor: '#FFF9DB', border: '1px solid #E67700', color: '#A65D03', fontWeight: 700, flexShrink: 0 }}>
+                        DRAFT
+                      </span>
+                    )}
                     <span
                       style={{
                         fontSize: '13px',
@@ -235,7 +240,9 @@ export const MailListView: React.FC<MailListViewProps> = ({
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {m.sender.split('<')[0].replace(/"/g, '').trim() || m.sender}
+                      {currentFolder === 'sent' || currentFolder === 'drafts'
+                        ? `To: ${m.recipient.split('<')[0].replace(/"/g, '').trim() || m.recipient}`
+                        : (m.sender.split('<')[0].replace(/"/g, '').trim() || m.sender)}
                     </span>
                   </div>
 
@@ -253,15 +260,16 @@ export const MailListView: React.FC<MailListViewProps> = ({
                 <div
                   style={{
                     fontSize: '13px',
-                    fontWeight: m.is_read ? 400 : 600,
+                    fontWeight: m.is_read ? 500 : 700,
                     color: m.is_read ? '#4B5563' : '#111827',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
                     paddingLeft: '22px',
+                    fontStyle: !m.subject || m.subject === '(No Subject)' ? 'italic' : 'normal',
                   }}
                 >
-                  {m.subject}
+                  {m.subject || '(No Subject)'}
                 </div>
 
                 {/* Row 3: Snippet preview */}
@@ -275,7 +283,7 @@ export const MailListView: React.FC<MailListViewProps> = ({
                     paddingLeft: '22px',
                   }}
                 >
-                  {m.snippet}
+                  {m.snippet || '(No content)'}
                 </div>
               </div>
             );

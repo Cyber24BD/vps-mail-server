@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Mail, Reply, CornerUpRight, Trash2, AlertOctagon,
-  Download, Paperclip, File, Image as ImageIcon
+  Download, Paperclip, File, Image as ImageIcon, Edit3
 } from 'lucide-react';
 import type { WebmailMessage } from '../../../types';
 import { api } from '../../../services/api';
@@ -16,6 +16,7 @@ interface MessageViewerProps {
   onMove: (msgId: string, toFolder: string) => void;
   onMarkSpam: (msgId: string) => void;
   onMarkHam: (msgId: string) => void;
+  onEditDraft?: (msg: WebmailMessage) => void;
 }
 
 const getInitials = (nameOrEmail: string): string => {
@@ -50,6 +51,7 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({
   onMove,
   onMarkSpam,
   onMarkHam,
+  onEditDraft,
 }) => {
   const [viewMode, setViewMode] = useState<'html' | 'text'>('html');
   const [allowRemoteImages, setAllowRemoteImages] = useState(false);
@@ -109,22 +111,35 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button
-            className="btn-secondary"
-            style={{ padding: '6px 12px', fontSize: '12px' }}
-            onClick={() => onReply(message)}
-          >
-            <Reply size={14} />
-            <span>Reply</span>
-          </button>
-          <button
-            className="btn-secondary"
-            style={{ padding: '6px 12px', fontSize: '12px' }}
-            onClick={() => onForward(message)}
-          >
-            <CornerUpRight size={14} />
-            <span>Forward</span>
-          </button>
+          {currentFolder.toLowerCase() === 'drafts' ? (
+            <button
+              className="btn-primary"
+              style={{ padding: '6px 14px', fontSize: '12px' }}
+              onClick={() => onEditDraft?.(message)}
+            >
+              <Edit3 size={14} />
+              <span>Continue Editing Draft</span>
+            </button>
+          ) : (
+            <>
+              <button
+                className="btn-secondary"
+                style={{ padding: '6px 12px', fontSize: '12px' }}
+                onClick={() => onReply(message)}
+              >
+                <Reply size={14} />
+                <span>Reply</span>
+              </button>
+              <button
+                className="btn-secondary"
+                style={{ padding: '6px 12px', fontSize: '12px' }}
+                onClick={() => onForward(message)}
+              >
+                <CornerUpRight size={14} />
+                <span>Forward</span>
+              </button>
+            </>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

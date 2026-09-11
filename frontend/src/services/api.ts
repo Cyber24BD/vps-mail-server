@@ -236,6 +236,22 @@ class ApiClient {
     });
   }
 
+  async saveDraft(data: {
+    recipient?: string;
+    subject?: string;
+    body_text?: string;
+    body_html?: string;
+    cc?: string;
+    bcc?: string;
+    mailbox?: string;
+    draft_id?: string;
+  }) {
+    return this.request<any>('/webmail/drafts/save', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   async checkSpamScore(subject: string, bodyText: string, bodyHtml?: string, attachmentNames?: string[]) {
     return this.request<any>('/webmail/spam-check', {
       method: 'POST',

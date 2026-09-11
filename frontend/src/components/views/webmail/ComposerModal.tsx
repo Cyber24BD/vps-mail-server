@@ -1,9 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
-  Send, Paperclip, X, ShieldCheck, AlertTriangle, ShieldAlert, Sparkles, Loader2
+  Send, Paperclip, X, ShieldCheck, AlertTriangle, ShieldAlert, Sparkles, Loader2, Save
 } from 'lucide-react';
 import { Modal } from '../../common/Modal';
-import { HtmlEditor } from '../../common/HtmlEditor';
+import { LexicalMailEditor } from '../../common/LexicalMailEditor';
 import { api } from '../../../services/api';
 import type { SpamCheckResult } from '../../../types';
 
@@ -16,6 +16,7 @@ interface ComposerModalProps {
   initialSubject?: string;
   initialBodyHtml?: string;
   initialBodyText?: string;
+  draftId?: string;
 }
 
 export const ComposerModal: React.FC<ComposerModalProps> = ({
@@ -27,6 +28,7 @@ export const ComposerModal: React.FC<ComposerModalProps> = ({
   initialSubject = '',
   initialBodyHtml = '',
   initialBodyText = '',
+  draftId,
 }) => {
   const [recipient, setRecipient] = useState(initialRecipient);
   const [showCcBcc, setShowCcBcc] = useState(false);
@@ -37,11 +39,41 @@ export const ComposerModal: React.FC<ComposerModalProps> = ({
   const [bodyText, setBodyText] = useState(initialBodyText);
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [checkingSpam, setCheckingSpam] = useState(false);
   const [spamResult, setSpamResult] = useState<SpamCheckResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Synchronize initial values whenever modal opens or props change
+  useEffect(() => {
+    if (isOpen) {
+      setRecipient(initialRecipient);
+      setSubject(initialSubject);
+      setBodyHtml(initialBodyHtml);
+      setBodyText(initialBodyText);
+      setCc('');
+      setBcc('');
+      setFiles([]);
+      setErrorMessage(null);
+      setSpamResult(null);
+      setShowCcBcc(false);
+    }
+  }, [isOpen, initialRecipient, initialSubject, initialBodyHtml, initialBodyText]);
+
+  const resetForm = () => {
+    setRecipient('');
+    setSubject('');
+    setBodyHtml('');
+    setBodyText('');
+    setCc('');
+    setBcc('');
+    setFiles([]);
+    setErrorMessage(null);
+    setSpamResult(null);
+    setShowCcBcc(false);
+  };
 
   const formatBytes = (bytes: number) => {
     if (!bytes || bytes === 0) return '0 B';
@@ -84,6 +116,36 @@ export const ComposerModal: React.FC<ComposerModalProps> = ({
     }
   };
 
+  const handleSaveDraft = async () => {
+    if (!subject && !bodyText && !bodyHtml && !recipient) {
+      setErrorMessage('Cannot save an empty draft.');
+      return;
+    }
+
+    setSavingDraft(true);
+    setErrorMessage(null);
+    try {
+      await api.saveDraft({
+        recipient: recipient.trim(),
+        subject: subject.trim() || '(Draft)',
+        body_text: bodyText,
+        body_html: bodyHtml,
+        cc: cc.trim() || undefined,
+        bcc: bcc.trim() || undefined,
+        mailbox: activeMailbox,
+        draft_id: draftId,
+      });
+
+      resetForm();
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to save draft');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
   const handleSend = async () => {
     if (!recipient.trim()) {
       setErrorMessage('Please enter at least one recipient email address.');
@@ -108,6 +170,7 @@ export const ComposerModal: React.FC<ComposerModalProps> = ({
         if (cc.trim()) formData.append('cc', cc.trim());
         if (bcc.trim()) formData.append('bcc', bcc.trim());
         if (activeMailbox) formData.append('mailbox', activeMailbox);
+        if (draftId) formData.append('draft_id', draftId);
 
         files.forEach((file) => {
           formData.append('files', file);
@@ -124,9 +187,12 @@ export const ComposerModal: React.FC<ComposerModalProps> = ({
           cc: cc.trim() || undefined,
           bcc: bcc.trim() || undefined,
           mailbox: activeMailbox,
+          draft_id: draftId,
         });
       }
 
+      // Reset form completely so no lingering draft remains!
+      resetForm();
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -137,7 +203,7 @@ export const ComposerModal: React.FC<ComposerModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Compose Message" maxWidth="720px">
+    <Modal isOpen={isOpen} onClose={onClose} title={draftId ? "Edit Draft Message" : "Compose Message"} maxWidth="780px">
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {/* Sender Info Pill */}
         <div
@@ -154,6 +220,11 @@ export const ComposerModal: React.FC<ComposerModalProps> = ({
         >
           <div>
             From: <strong style={{ color: '#111827' }}>{activeMailbox}</strong>
+            {draftId && (
+              <span style={{ marginLeft: '8px', padding: '2px 6px', backgroundColor: '#FFF9DB', border: '1px solid #E67700', borderRadius: '4px', color: '#A65D03', fontSize: '11px', fontWeight: 600 }}>
+                Draft
+              </span>
+            )}
           </div>
           <button
             type="button"
@@ -245,20 +316,25 @@ export const ComposerModal: React.FC<ComposerModalProps> = ({
           />
         </div>
 
-        {/* Rich HTML Designer */}
+        {/* Lexical Rich Email Designer */}
         <div>
-          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '4px' }}>
-            Message Content
-          </label>
-          <HtmlEditor
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151' }}>
+              Message Design (Lexical Editor)
+            </label>
+            <span style={{ fontSize: '11px', color: '#6B7280' }}>
+              Rich HTML typography & custom templates
+            </span>
+          </div>
+          <LexicalMailEditor
             value={bodyHtml || bodyText}
             onChange={(html, text) => {
               setBodyHtml(html);
               setBodyText(text);
               setSpamResult(null);
             }}
-            placeholder="Compose your message here..."
-            minHeight="200px"
+            placeholder="Compose your email message with rich styling, headings, or templates..."
+            minHeight="220px"
           />
         </div>
 
@@ -390,10 +466,33 @@ export const ComposerModal: React.FC<ComposerModalProps> = ({
           </button>
 
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button type="button" className="btn-secondary" onClick={onClose} disabled={sending}>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleSaveDraft}
+              disabled={savingDraft || sending}
+              title="Save current message to Drafts"
+            >
+              {savingDraft ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+              <span>{savingDraft ? 'Saving...' : 'Save Draft'}</span>
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                resetForm();
+                onClose();
+              }}
+              disabled={sending || savingDraft}
+            >
               Discard
             </button>
-            <button type="button" className="btn-primary" onClick={handleSend} disabled={sending}>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={handleSend}
+              disabled={sending || savingDraft}
+            >
               {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
               <span>{sending ? 'Dispatching...' : 'Send Message'}</span>
             </button>
@@ -403,3 +502,4 @@ export const ComposerModal: React.FC<ComposerModalProps> = ({
     </Modal>
   );
 };
+export default ComposerModal;

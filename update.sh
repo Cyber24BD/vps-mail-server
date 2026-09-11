@@ -207,6 +207,9 @@ if ! docker compose up -d --build; then
   exit 1
 fi
 
+# Clean up dangling build cache to conserve host RAM and disk space
+docker builder prune -f >/dev/null 2>&1 || true
+
 # Always restart Nginx reverse proxy so it immediately picks up fresh container internal IPs
 log_info "Synchronizing reverse proxy upstream IP bindings..."
 docker compose restart nginx || true

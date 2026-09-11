@@ -163,6 +163,27 @@ services:
     image: clamav/clamav:latest
     container_name: corpmail-clamav
     restart: always
+    environment:
+      # Memory Optimization: Prevent loading 2 databases simultaneously during updates (prevents 100% RAM spike)
+      - CLAMD_CONF_ConcurrentDatabaseReload=no
+      # Thread Optimization: Default 10 threads multiplies memory buffers; 2 is optimal for mail
+      - CLAMD_CONF_MaxThreads=2
+      - CLAMD_CONF_MaxQueue=10
+      # Scan Limits: Tailor for corporate email attachments (Rspamd cap is 20MB)
+      - CLAMD_CONF_MaxScanSize=30M
+      - CLAMD_CONF_MaxFileSize=25M
+      - CLAMD_CONF_StreamMaxLength=25M
+      - CLAMD_CONF_MaxRecursion=10
+      - CLAMD_CONF_MaxFiles=1000
+      - CLAMD_CONF_PCREMaxFileSize=10M
+      - CLAMD_CONF_BytecodeSecurity=TrustSigned
+      - CLAMD_CONF_ExitOnOOM=yes
+      # Freshclam Optimization: Check updates 4x/day, disable duplicate in-memory test
+      - FRESHCLAM_CONF_Checks=4
+      - FRESHCLAM_CONF_TestDatabases=no
+    volumes:
+      - clamav_data:/var/lib/clamav
+    mem_limit: 1800m
     networks:
       - corpmail-net
 
@@ -188,6 +209,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  clamav_data:
 
 networks:
   corpmail-net:

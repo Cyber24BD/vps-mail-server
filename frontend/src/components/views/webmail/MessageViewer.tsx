@@ -446,6 +446,50 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({
           </div>
         )}
       </div>
+
+      {/* Bottom Quick Action Bar */}
+      {currentFolder.toLowerCase() !== 'drafts' && (
+        <div
+          style={{
+            padding: '16px 28px 24px',
+            borderTop: '1px solid #F1F3F5',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            backgroundColor: '#FFFFFF',
+          }}
+        >
+          <button
+            className="btn-secondary"
+            style={{ padding: '7px 14px', fontSize: '12.5px', borderRadius: '8px' }}
+            onClick={() => onReply(message)}
+            title="Reply to sender"
+          >
+            <Reply size={14} />
+            <span>Reply</span>
+          </button>
+          {onReplyAll && (
+            <button
+              className="btn-secondary"
+              style={{ padding: '7px 14px', fontSize: '12.5px', borderRadius: '8px' }}
+              onClick={() => onReplyAll(message)}
+              title="Reply to sender and all recipients"
+            >
+              <ReplyAll size={14} />
+              <span>Reply All</span>
+            </button>
+          )}
+          <button
+            className="btn-secondary"
+            style={{ padding: '7px 14px', fontSize: '12.5px', borderRadius: '8px' }}
+            onClick={() => onForward(message)}
+            title="Forward message"
+          >
+            <CornerUpRight size={14} />
+            <span>Forward</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

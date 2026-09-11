@@ -21,6 +21,9 @@ import {
   REDO_COMMAND,
   $getRoot,
   $createParagraphNode,
+  $isElementNode,
+  $isDecoratorNode,
+  ParagraphNode,
   type EditorState,
   type LexicalEditor,
 } from 'lexical';
@@ -419,18 +422,50 @@ const ToolbarPlugin: React.FC<{
 // Initial HTML Hydration Plugin
 const InitialHtmlPlugin: React.FC<{ initialHtml: string }> = ({ initialHtml }) => {
   const [editor] = useLexicalComposerContext();
-  const hydratedRef = useRef(false);
+  const lastHtmlRef = useRef<string>('');
 
   useEffect(() => {
-    if (!hydratedRef.current && initialHtml) {
-      hydratedRef.current = true;
+    if (initialHtml && initialHtml !== lastHtmlRef.current) {
+      lastHtmlRef.current = initialHtml;
       editor.update(() => {
-        const parser = new DOMParser();
-        const dom = parser.parseFromString(initialHtml, 'text/html');
-        const nodes = $generateNodesFromDOM(editor, dom);
-        const root = $getRoot();
-        root.clear();
-        root.append(...nodes);
+        try {
+          const parser = new DOMParser();
+          const dom = parser.parseFromString(initialHtml, 'text/html');
+          const sourceNode = dom.body || dom;
+          const nodes = $generateNodesFromDOM(editor, sourceNode);
+          const root = $getRoot();
+          root.clear();
+
+          let currentP: ParagraphNode | null = null;
+          for (const node of nodes) {
+            if ($isElementNode(node) || $isDecoratorNode(node)) {
+              if (currentP) {
+                root.append(currentP);
+                currentP = null;
+              }
+              root.append(node);
+            } else {
+              // Wrap inline/text node in a ParagraphNode to respect Lexical Root invariant
+              if (!currentP) {
+                currentP = $createParagraphNode();
+              }
+              currentP.append(node);
+            }
+          }
+          if (currentP) {
+            root.append(currentP);
+          }
+
+          if (root.getChildrenSize() === 0) {
+            root.append($createParagraphNode());
+          }
+        } catch (err) {
+          console.warn('InitialHtmlPlugin safe fallback:', err);
+          const root = $getRoot();
+          if (root.getChildrenSize() === 0) {
+            root.append($createParagraphNode());
+          }
+        }
       });
     }
   }, [editor, initialHtml]);
@@ -448,6 +483,10 @@ export const LexicalMailEditor: React.FC<LexicalMailEditorProps> = ({
   const [isSourceMode, setIsSourceMode] = useState(false);
   const [rawHtml, setRawHtml] = useState(value);
   const editorInstanceRef = useRef<LexicalEditor | null>(null);
+
+  useEffect(() => {
+    setRawHtml(value || '');
+  }, [value]);
 
   const initialConfig = {
     namespace: 'CorpMailEditor',

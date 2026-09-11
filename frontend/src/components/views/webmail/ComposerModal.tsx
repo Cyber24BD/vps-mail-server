@@ -7,6 +7,13 @@ import { LexicalMailEditor } from '../../common/LexicalMailEditor';
 import { api } from '../../../services/api';
 import type { SpamCheckResult } from '../../../types';
 
+export interface InitialAttachmentItem {
+  filename: string;
+  size: number;
+  downloadUrl: string;
+  contentType?: string;
+}
+
 interface ComposerModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -18,6 +25,7 @@ interface ComposerModalProps {
   initialSubject?: string;
   initialBodyHtml?: string;
   initialBodyText?: string;
+  initialAttachments?: InitialAttachmentItem[];
   draftId?: string;
 }
 
@@ -32,6 +40,7 @@ export const ComposerModal: React.FC<ComposerModalProps> = ({
   initialSubject = '',
   initialBodyHtml = '',
   initialBodyText = '',
+  initialAttachments,
   draftId,
 }) => {
   const [recipient, setRecipient] = useState(initialRecipient);
@@ -65,6 +74,34 @@ export const ComposerModal: React.FC<ComposerModalProps> = ({
       setShowCcBcc(Boolean(initialCc || initialBcc));
     }
   }, [isOpen, initialRecipient, initialCc, initialBcc, initialSubject, initialBodyHtml, initialBodyText]);
+
+  // Load forwarded or existing message attachments as File objects
+  useEffect(() => {
+    if (isOpen && initialAttachments && initialAttachments.length > 0) {
+      let isMounted = true;
+      Promise.all(
+        initialAttachments.map(async (att) => {
+          try {
+            const res = await fetch(att.downloadUrl);
+            const blob = await res.blob();
+            return new File([blob], att.filename, { type: att.contentType || 'application/octet-stream' });
+          } catch (err) {
+            console.warn('Could not load attachment for forward:', att.filename, err);
+            return null;
+          }
+        })
+      ).then((loaded) => {
+        if (!isMounted) return;
+        const valid = loaded.filter((f): f is File => f !== null);
+        if (valid.length > 0) {
+          setFiles((prev) => [...prev, ...valid]);
+        }
+      });
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [isOpen, initialAttachments]);
 
   const resetForm = () => {
     setRecipient('');

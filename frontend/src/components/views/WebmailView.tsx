@@ -11,7 +11,7 @@ import { SkeletonCard } from '../common/SkeletonCard';
 import { FolderSidebar } from './webmail/FolderSidebar';
 import { MailListView } from './webmail/MailListView';
 import { MessageViewer } from './webmail/MessageViewer';
-import { ComposerModal } from './webmail/ComposerModal';
+import { ComposerModal, type InitialAttachmentItem } from './webmail/ComposerModal';
 import type {
   WebmailMessage,
   FolderStat,
@@ -50,8 +50,9 @@ export const WebmailView: React.FC = () => {
     subject: string;
     bodyHtml: string;
     bodyText: string;
+    attachments?: InitialAttachmentItem[];
     draftId?: string;
-  }>({ recipient: '', cc: '', bcc: '', subject: '', bodyHtml: '', bodyText: '' });
+  }>({ recipient: '', cc: '', bcc: '', subject: '', bodyHtml: '', bodyText: '', attachments: [] });
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<any>(null);
@@ -366,21 +367,71 @@ export const WebmailView: React.FC = () => {
     }
   };
 
+  // HTML embed & sanitization helpers for Forward & Reply
+  const escapeHtml = (str: string = ''): string => {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  };
+
+  const sanitizeForEmbed = (html?: string, text?: string): string => {
+    if (html && html.trim()) {
+      let clean = html;
+      const bodyMatch = clean.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+      if (bodyMatch && bodyMatch[1]) {
+        clean = bodyMatch[1];
+      }
+      clean = clean.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+      clean = clean.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+      return clean;
+    }
+    if (text && text.trim()) {
+      return text
+        .split(/\r?\n/)
+        .map((line) => `<p>${line.trim() ? escapeHtml(line) : '<br/>'}</p>`)
+        .join('');
+    }
+    return '<p></p>';
+  };
+
   // Reply, Reply All & Forward
-  const handleReply = (msg: WebmailMessage) => {
-    const quote = `\n\n--- Original Message ---\nFrom: ${msg.sender}\nDate: ${msg.date}\n\n${msg.body_text || msg.snippet}`;
+  const handleReply = async (msg: WebmailMessage) => {
+    let fullMsg = msg;
+    if (!fullMsg.body_html && !fullMsg.body_text) {
+      try {
+        fullMsg = await api.getWebmailMessage(msg.id, currentFolder, activeMailbox);
+      } catch {
+        fullMsg = msg;
+      }
+    }
+    const cleanSubject = fullMsg.subject || '';
+    const reSubject = cleanSubject.toLowerCase().startsWith('re:') ? cleanSubject : `Re: ${cleanSubject}`;
+    const quote = `\n\n--- Original Message ---\nFrom: ${fullMsg.sender}\nDate: ${fullMsg.date}\n\n${fullMsg.body_text || fullMsg.snippet || ''}`;
     setComposerState({
-      recipient: msg.sender,
+      recipient: fullMsg.sender,
       cc: '',
       bcc: '',
-      subject: msg.subject.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`,
-      bodyHtml: `<p></p><blockquote style="border-left: 2px solid #D1D5DB; padding-left: 12px; margin-left: 0; color: #4B5563;"><strong>From:</strong> ${msg.sender}<br/><strong>Date:</strong> ${msg.date}<br/><br/>${msg.body_html || msg.body_text || ''}</blockquote>`,
+      subject: reSubject,
+      bodyHtml: `<p><br/></p><blockquote style="border-left: 2px solid #D1D5DB; padding-left: 12px; margin-left: 0; color: #4B5563;"><p style="margin:0 0 6px 0;"><strong>From:</strong> ${escapeHtml(fullMsg.sender)}<br/><strong>Date:</strong> ${escapeHtml(fullMsg.date)}</p>${sanitizeForEmbed(fullMsg.body_html, fullMsg.body_text)}</blockquote>`,
       bodyText: quote,
+      attachments: [],
+      draftId: undefined,
     });
     setIsComposeOpen(true);
   };
 
-  const handleReplyAll = (msg: WebmailMessage) => {
+  const handleReplyAll = async (msg: WebmailMessage) => {
+    let fullMsg = msg;
+    if (!fullMsg.body_html && !fullMsg.body_text) {
+      try {
+        fullMsg = await api.getWebmailMessage(msg.id, currentFolder, activeMailbox);
+      } catch {
+        fullMsg = msg;
+      }
+    }
     const parseAddrs = (str?: string): string[] => {
       if (!str) return [];
       return str
@@ -390,10 +441,10 @@ export const WebmailView: React.FC = () => {
     };
 
     const myEmail = activeMailbox.toLowerCase();
-    const senderEmail = msg.sender.toLowerCase();
+    const senderEmail = fullMsg.sender.toLowerCase();
 
     // Collect all candidates from recipient (To) and CC, exclude self and sender
-    const candidateAddrs = [...parseAddrs(msg.recipient), ...parseAddrs(msg.cc)];
+    const candidateAddrs = [...parseAddrs(fullMsg.recipient), ...parseAddrs(fullMsg.cc)];
     const uniqueCc = Array.from(
       new Set(
         candidateAddrs
@@ -405,26 +456,67 @@ export const WebmailView: React.FC = () => {
       )
     ).join(', ');
 
-    const quote = `\n\n--- Original Message ---\nFrom: ${msg.sender}\nDate: ${msg.date}\n\n${msg.body_text || msg.snippet}`;
+    const cleanSubject = fullMsg.subject || '';
+    const reSubject = cleanSubject.toLowerCase().startsWith('re:') ? cleanSubject : `Re: ${cleanSubject}`;
+    const quote = `\n\n--- Original Message ---\nFrom: ${fullMsg.sender}\nDate: ${fullMsg.date}\n\n${fullMsg.body_text || fullMsg.snippet || ''}`;
     setComposerState({
-      recipient: msg.sender,
+      recipient: fullMsg.sender,
       cc: uniqueCc,
       bcc: '',
-      subject: msg.subject.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`,
-      bodyHtml: `<p></p><blockquote style="border-left: 2px solid #D1D5DB; padding-left: 12px; margin-left: 0; color: #4B5563;"><strong>From:</strong> ${msg.sender}<br/><strong>Date:</strong> ${msg.date}<br/><br/>${msg.body_html || msg.body_text || ''}</blockquote>`,
+      subject: reSubject,
+      bodyHtml: `<p><br/></p><blockquote style="border-left: 2px solid #D1D5DB; padding-left: 12px; margin-left: 0; color: #4B5563;"><p style="margin:0 0 6px 0;"><strong>From:</strong> ${escapeHtml(fullMsg.sender)}<br/><strong>Date:</strong> ${escapeHtml(fullMsg.date)}</p>${sanitizeForEmbed(fullMsg.body_html, fullMsg.body_text)}</blockquote>`,
       bodyText: quote,
+      attachments: [],
+      draftId: undefined,
     });
     setIsComposeOpen(true);
   };
 
-  const handleForward = (msg: WebmailMessage) => {
+  const handleForward = async (msg: WebmailMessage) => {
+    let fullMsg = msg;
+    if (!fullMsg.body_html && !fullMsg.body_text) {
+      try {
+        fullMsg = await api.getWebmailMessage(msg.id, currentFolder, activeMailbox);
+      } catch {
+        fullMsg = msg;
+      }
+    }
+
+    const cleanSubject = fullMsg.subject || '';
+    const fwdSubject = cleanSubject.toLowerCase().startsWith('fwd:') ? cleanSubject : `Fwd: ${cleanSubject}`;
+
+    const forwardedContentHtml = sanitizeForEmbed(fullMsg.body_html, fullMsg.body_text);
+    const forwardHeaderHtml = `
+      <p><br/></p>
+      <div style="border-top: 1px solid #E5E7EB; padding-top: 12px; margin-top: 16px; margin-bottom: 12px; color: #4B5563; font-size: 13px;">
+        <p style="margin: 0 0 6px 0; font-weight: 700; color: #111827;">---------- Forwarded message ---------</p>
+        <p style="margin: 0 0 3px 0;"><strong>From:</strong> ${escapeHtml(fullMsg.sender)}</p>
+        <p style="margin: 0 0 3px 0;"><strong>Date:</strong> ${escapeHtml(fullMsg.date)}</p>
+        <p style="margin: 0 0 3px 0;"><strong>Subject:</strong> ${escapeHtml(cleanSubject)}</p>
+        <p style="margin: 0 0 3px 0;"><strong>To:</strong> ${escapeHtml(fullMsg.recipient)}</p>
+        ${fullMsg.cc ? `<p style="margin: 0 0 3px 0;"><strong>Cc:</strong> ${escapeHtml(fullMsg.cc)}</p>` : ''}
+      </div>
+      <div>${forwardedContentHtml}</div>
+    `;
+
+    const forwardHeaderText = `\n\n---------- Forwarded message ---------\nFrom: ${fullMsg.sender}\nDate: ${fullMsg.date}\nSubject: ${cleanSubject}\nTo: ${fullMsg.recipient}${fullMsg.cc ? `\nCc: ${fullMsg.cc}` : ''}\n\n${fullMsg.body_text || fullMsg.snippet || ''}`;
+
+    // Collect attachments from the message being forwarded
+    const initialAtts = (fullMsg.attachments || []).map((att) => ({
+      filename: att.filename,
+      size: att.size,
+      contentType: att.content_type,
+      downloadUrl: api.getAttachmentDownloadUrl(fullMsg.id, att.index, currentFolder, activeMailbox),
+    }));
+
     setComposerState({
       recipient: '',
       cc: '',
       bcc: '',
-      subject: msg.subject.startsWith('Fwd:') ? msg.subject : `Fwd: ${msg.subject}`,
-      bodyHtml: `<p></p><hr/><p><strong>---------- Forwarded message ---------</strong><br/><strong>From:</strong> ${msg.sender}<br/><strong>Subject:</strong> ${msg.subject}<br/><strong>Date:</strong> ${msg.date}</p>${msg.body_html || msg.body_text || ''}`,
-      bodyText: `\n\n---------- Forwarded message ---------\nFrom: ${msg.sender}\nSubject: ${msg.subject}\nDate: ${msg.date}\n\n${msg.body_text || msg.snippet}`,
+      subject: fwdSubject,
+      bodyHtml: forwardHeaderHtml,
+      bodyText: forwardHeaderText,
+      attachments: initialAtts,
       draftId: undefined,
     });
     setIsComposeOpen(true);
@@ -438,6 +530,7 @@ export const WebmailView: React.FC = () => {
       subject: msg.subject || '',
       bodyHtml: msg.body_html || '',
       bodyText: msg.body_text || msg.snippet || '',
+      attachments: [],
       draftId: msg.id,
     });
     setIsComposeOpen(true);
@@ -636,7 +729,7 @@ export const WebmailView: React.FC = () => {
             className="btn-primary"
             style={{ padding: '6px 14px', height: '34px', fontSize: '13px' }}
             onClick={() => {
-              setComposerState({ recipient: '', cc: '', bcc: '', subject: '', bodyHtml: '', bodyText: '', draftId: undefined });
+              setComposerState({ recipient: '', cc: '', bcc: '', subject: '', bodyHtml: '', bodyText: '', attachments: [], draftId: undefined });
               setIsComposeOpen(true);
             }}
           >
@@ -705,29 +798,34 @@ export const WebmailView: React.FC = () => {
       </div>
 
       {/* Modern Lexical Compose Modal */}
-      <ComposerModal
-        isOpen={isComposeOpen}
-        onClose={() => {
-          setIsComposeOpen(false);
-          setComposerState({ recipient: '', cc: '', bcc: '', subject: '', bodyHtml: '', bodyText: '', draftId: undefined });
-        }}
-        onSuccess={() => {
-          showToast('Email dispatched to SMTP queue and saved to Sent folder.');
-          setComposerState({ recipient: '', cc: '', bcc: '', subject: '', bodyHtml: '', bodyText: '', draftId: undefined });
-          loadFolders(activeMailbox);
-          if (currentFolder === 'sent' || currentFolder === 'drafts') {
-            loadMessages(currentFolder, activeMailbox, searchQuery);
-          }
-        }}
-        activeMailbox={activeMailbox}
-        initialRecipient={composerState.recipient}
-        initialCc={composerState.cc}
-        initialBcc={composerState.bcc}
-        initialSubject={composerState.subject}
-        initialBodyHtml={composerState.bodyHtml}
-        initialBodyText={composerState.bodyText}
-        draftId={composerState.draftId}
-      />
+      {isComposeOpen && (
+        <ComposerModal
+          key={composerState.draftId ? `draft-${composerState.draftId}` : `composer-${Date.now()}`}
+          isOpen={isComposeOpen}
+          onClose={() => {
+            setIsComposeOpen(false);
+            setComposerState({ recipient: '', cc: '', bcc: '', subject: '', bodyHtml: '', bodyText: '', attachments: [], draftId: undefined });
+          }}
+          onSuccess={() => {
+            showToast('Email dispatched to SMTP queue and saved to Sent folder.');
+            setIsComposeOpen(false);
+            setComposerState({ recipient: '', cc: '', bcc: '', subject: '', bodyHtml: '', bodyText: '', attachments: [], draftId: undefined });
+            loadFolders(activeMailbox);
+            if (currentFolder === 'sent' || currentFolder === 'drafts') {
+              loadMessages(currentFolder, activeMailbox, searchQuery);
+            }
+          }}
+          activeMailbox={activeMailbox}
+          initialRecipient={composerState.recipient}
+          initialCc={composerState.cc}
+          initialBcc={composerState.bcc}
+          initialSubject={composerState.subject}
+          initialBodyHtml={composerState.bodyHtml}
+          initialBodyText={composerState.bodyText}
+          initialAttachments={composerState.attachments}
+          draftId={composerState.draftId}
+        />
+      )}
     </div>
   );
 };

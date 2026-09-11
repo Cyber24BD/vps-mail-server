@@ -94,6 +94,9 @@ export interface WebmailAttachment {
   filename: string;
   content_type: string;
   size: number;
+  is_shared?: boolean;
+  shared_file_id?: string;
+  owner_mailbox?: string;
 }
 
 export interface WebmailMessage {
@@ -161,3 +164,39 @@ export interface BootstrapStatus {
   total_domains: number;
   total_mailboxes: number;
 }
+
+export interface StorageFileItem {
+  id: string;
+  filename: string;
+  filesize: number;
+  content_type: string;
+  category: 'images' | 'documents' | 'media' | 'archives' | 'others';
+  sha256?: string;
+  source_type?: string;
+  message_id?: string;
+  subject?: string;
+  created_at?: string;
+  shared_with: string[];
+  is_shared: boolean;
+}
+
+export interface StorageCategoryStats {
+  bytes: number;
+  count: number;
+}
+
+export interface StorageStats {
+  mailbox_email: string;
+  quota_bytes: number;
+  total_bytes_used: number;
+  percent_used: number;
+  total_files: number;
+  breakdown: {
+    images: StorageCategoryStats;
+    documents: StorageCategoryStats;
+    media: StorageCategoryStats;
+    archives: StorageCategoryStats;
+    others: StorageCategoryStats;
+  };
+}
+

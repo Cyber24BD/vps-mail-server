@@ -12,6 +12,7 @@ from app.api.v1.endpoints import (
     logs,
     webmail,
     settings as settings_endpoint,
+    storage,
 )
 
 from app.core.config import settings
@@ -27,6 +28,7 @@ api_router.include_router(domains.router, prefix="/domains", tags=["Domains & DN
 api_router.include_router(mailboxes.router, prefix="/mailboxes", tags=["Mailboxes & Quotas"])
 api_router.include_router(security.router, prefix="/security", tags=["Security & SSL"])
 api_router.include_router(settings_endpoint.router, prefix="/settings", tags=["System Settings"])
+api_router.include_router(storage.router, prefix="/storage", tags=["Storage & Media Vault"])
 api_router.include_router(updates.router, prefix="/updates", tags=["Platform Updates"])
 api_router.include_router(logs.router, prefix="/logs", tags=["Audit Logs"])
 

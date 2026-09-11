@@ -164,3 +164,37 @@ class AuditLog(Base):
     details = Column(JSONB, nullable=True)
     ip_address = Column(String(45), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class StorageFile(Base):
+    __tablename__ = "storage_files"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    owner_mailbox = Column(String(255), nullable=False, index=True)
+    filename = Column(String(255), nullable=False)
+    filesize = Column(BigInteger, nullable=False, default=0)
+    content_type = Column(String(100), nullable=False, default="application/octet-stream")
+    file_path = Column(Text, nullable=False)
+    sha256 = Column(String(64), nullable=True, index=True)
+    source_type = Column(String(50), default="email_attachment")
+    message_id = Column(String(255), nullable=True)
+    subject = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    permissions = relationship("StorageFilePermission", back_populates="file", cascade="all, delete-orphan")
+
+
+class StorageFilePermission(Base):
+    __tablename__ = "storage_file_permissions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    file_id = Column(UUID(as_uuid=True), ForeignKey("storage_files.id", ondelete="CASCADE"), nullable=False, index=True)
+    granted_to = Column(String(255), nullable=False, index=True)
+    permission = Column(String(20), default="view_download")
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (UniqueConstraint("file_id", "granted_to", name="uq_file_granted_to"),)
+
+    file = relationship("StorageFile", back_populates="permissions")
+

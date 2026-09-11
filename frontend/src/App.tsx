@@ -9,6 +9,7 @@ import { WebmailView } from './components/views/WebmailView';
 import { SecurityView } from './components/views/SecurityView';
 import { DiagnosticsView } from './components/views/DiagnosticsView';
 import { SettingsView } from './components/views/SettingsView';
+import { StorageView } from './components/views/storage/StorageView';
 import { SetupWizardView } from './components/views/SetupWizardView';
 import { SkeletonCard } from './components/common/SkeletonCard';
 import { api } from './services/api';
@@ -187,7 +188,9 @@ export const App: React.FC = () => {
 
         <section style={{ flex: 1, minWidth: 0 }}>
           {currentUser?.type === 'mailbox' || currentUser?.role === 'user' ? (
-            <WebmailView />
+            <>
+              {currentTab === 'storage' ? <StorageView /> : <WebmailView />}
+            </>
           ) : (
             <>
               {currentTab === 'dashboard' && <DashboardView />}
@@ -195,6 +198,7 @@ export const App: React.FC = () => {
               {currentTab === 'mailboxes' && <MailboxesView />}
               {currentTab === 'aliases' && <AliasesView />}
               {currentTab === 'webmail' && <WebmailView />}
+              {currentTab === 'storage' && <StorageView />}
               {currentTab === 'security' && <SecurityView />}
               {currentTab === 'diagnostics' && <DiagnosticsView />}
               {currentTab === 'settings' && <SettingsView />}

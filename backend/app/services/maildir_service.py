@@ -406,15 +406,35 @@ class MaildirService:
             cdisp = str(part.get("Content-Disposition", ""))
             filename = part.get_filename()
 
-            if "attachment" in cdisp or filename:
+            if "attachment" in cdisp or filename or ctype == "application/x-corpmail-shared-attachment":
                 payload = part.get_payload(decode=True)
                 size_bytes = len(payload) if payload else 0
                 safe_name = filename or f"attachment_{attach_idx + 1}.bin"
+                is_shared = False
+                shared_file_id = None
+                owner_mb = None
+
+                if ctype == "application/x-corpmail-shared-attachment" and payload:
+                    try:
+                        import json
+                        meta = json.loads(payload.decode("utf-8"))
+                        is_shared = True
+                        shared_file_id = meta.get("id")
+                        safe_name = meta.get("filename", safe_name)
+                        ctype = meta.get("content_type", "application/octet-stream")
+                        size_bytes = meta.get("filesize", size_bytes)
+                        owner_mb = meta.get("owner")
+                    except Exception:
+                        pass
+
                 attachments.append({
                     "index": attach_idx,
                     "filename": safe_name,
                     "content_type": ctype,
-                    "size": size_bytes
+                    "size": size_bytes,
+                    "is_shared": is_shared,
+                    "shared_file_id": shared_file_id,
+                    "owner_mailbox": owner_mb
                 })
                 attach_idx += 1
             elif ctype == "text/plain" and not body_text:
@@ -497,11 +517,19 @@ class MaildirService:
         for part in msg.walk():
             cdisp = str(part.get("Content-Disposition", ""))
             filename = part.get_filename()
-            if "attachment" in cdisp or filename:
+            ctype = part.get_content_type()
+            if "attachment" in cdisp or filename or ctype == "application/x-corpmail-shared-attachment":
                 if current_idx == attachment_index:
                     payload = part.get_payload(decode=True) or b""
                     ctype = part.get_content_type() or "application/octet-stream"
                     safe_name = filename or f"attachment_{attachment_index + 1}.bin"
+                    if ctype == "application/x-corpmail-shared-attachment" and payload:
+                        try:
+                            import json
+                            meta = json.loads(payload.decode("utf-8"))
+                            safe_name = meta.get("filename", safe_name)
+                        except Exception:
+                            pass
                     return payload, safe_name, ctype
                 current_idx += 1
 

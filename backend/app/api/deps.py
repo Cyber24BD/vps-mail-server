@@ -1,10 +1,60 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from fastapi import Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import oauth2_scheme, decode_token
 from app.repositories.admin_repo import AdminRepository
-from app.models.models import Administrator, AuditLog
+from app.models.models import Administrator, AuditLog, Mailbox
+
+
+async def get_current_user_context(token: str = Depends(oauth2_scheme)) -> Dict[str, Any]:
+    payload = decode_token(token)
+    user = payload.get("sub")
+    role = payload.get("role", "user")
+    token_type = payload.get("type", "mailbox")
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid session token")
+    return {"sub": user, "role": role, "type": token_type}
+
+
+async def resolve_active_mailbox(
+    user_ctx: Dict[str, Any],
+    requested_mailbox: Optional[str],
+    db: AsyncSession
+) -> str:
+    """
+    Enforces access control:
+    - If user is a standard mailbox account, only allows their own email.
+    - If user is an admin, allows selecting any active mailbox, or defaults to the first available mailbox.
+    """
+    if user_ctx["type"] == "mailbox":
+        return user_ctx["sub"].lower().strip()
+
+    # Admin context:
+    if requested_mailbox:
+        clean_req = requested_mailbox.lower().strip()
+        try:
+            stmt = select(Mailbox).where(Mailbox.email == clean_req)
+            res = await db.execute(stmt)
+            mb = res.scalar_one_or_none()
+            if mb:
+                return mb.email
+        except Exception:
+            pass
+        return clean_req
+
+    try:
+        stmt = select(Mailbox).where(Mailbox.is_active.is_(True)).order_by(Mailbox.created_at.desc()).limit(1)
+        res = await db.execute(stmt)
+        mb = res.scalar_one_or_none()
+        if mb:
+            return mb.email
+    except Exception:
+        pass
+
+    return user_ctx["sub"].lower().strip()
+
 
 
 async def get_current_admin(

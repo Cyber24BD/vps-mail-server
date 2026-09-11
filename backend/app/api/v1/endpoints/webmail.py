@@ -12,7 +12,7 @@ import smtplib
 from fastapi import (
     APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Response
 )
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -26,6 +26,7 @@ from app.services.maildir_service import (
 )
 from app.services.spam_service import SpamService
 from app.services.routing_service import MessageRoutingService
+from app.services.storage_vault_service import StorageVaultService
 
 router = APIRouter()
 
@@ -39,6 +40,10 @@ class AttachmentInfo(BaseModel):
     filename: str
     content_type: str
     size: int
+    is_shared: Optional[bool] = False
+    shared_file_id: Optional[str] = None
+    owner_mailbox: Optional[str] = None
+
 
 
 class WebmailMessageOut(BaseModel):
@@ -341,6 +346,41 @@ async def download_attachment(
 
     payload, filename, content_type = result
     safe_name = filename.replace('"', '')
+
+    shared_id = None
+    if content_type == "application/x-corpmail-shared-attachment" and payload:
+        try:
+            meta = json.loads(payload.decode("utf-8"))
+            shared_id = meta.get("id")
+            safe_name = meta.get("filename", safe_name)
+        except Exception:
+            pass
+
+    # If this is a zero-copy shared attachment, stream from StorageVaultService with ACL verification
+    if shared_id:
+        is_admin = user_ctx.get("role") == "super_admin"
+        file_record = await StorageVaultService.get_file_for_access(
+            file_id=shared_id,
+            requesting_mailbox=active_mb,
+            is_admin=is_admin,
+            db=db
+        )
+        if not file_record:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: You do not have permission to access this internal shared attachment."
+            )
+        if not file_record.file_path or not os.path.exists(file_record.file_path):
+            raise HTTPException(
+                status_code=404,
+                detail="The attachment was deleted from storage by the sender to reclaim space."
+            )
+        return FileResponse(
+            path=file_record.file_path,
+            media_type=file_record.content_type or content_type,
+            filename=file_record.filename
+        )
+
     return Response(
         content=payload,
         media_type=content_type,
@@ -418,17 +458,23 @@ async def send_email(
     if body_html and body_html.strip():
         msg.add_alternative(body_html, subtype="html")
 
-    # Read and add attachments
+    # Read and store attachments in sender's storage vault
+    uploaded_files_data = []
     for upload in files:
         if upload.filename:
             file_bytes = await upload.read()
-            maintype, _, subtype = (upload.content_type or "application/octet-stream").partition("/")
-            msg.add_attachment(
-                file_bytes,
-                maintype=maintype or "application",
-                subtype=subtype or "octet-stream",
-                filename=upload.filename
-            )
+            try:
+                stored_file = await StorageVaultService.store_attachment(
+                    sender_mailbox=active_mb,
+                    file_bytes=file_bytes,
+                    filename=upload.filename,
+                    content_type=upload.content_type,
+                    db=db,
+                    subject=subject
+                )
+                uploaded_files_data.append((stored_file, file_bytes, upload.filename, upload.content_type))
+            except Exception:
+                uploaded_files_data.append((None, file_bytes, upload.filename, upload.content_type))
 
     # Classify delivery path via modular MessageRoutingService
     all_recipients = [recipient.strip().lower()]
@@ -440,6 +486,41 @@ async def send_email(
         recipients=all_recipients,
         db=db
     )
+
+    # Grant zero-copy access permissions to internal recipients
+    if routing_plan.internal_recipients:
+        for sf, _, _, _ in uploaded_files_data:
+            if sf:
+                await StorageVaultService.grant_permissions(sf.id, routing_plan.internal_recipients, db)
+
+    # For internal recipients and Sent folder: attach lightweight zero-copy pointer parts
+    if uploaded_files_data and all(sf is not None for sf, _, _, _ in uploaded_files_data):
+        for sf, _, fname, ctype in uploaded_files_data:
+            ptr_data = json.dumps({
+                "id": str(sf.id),
+                "filename": sf.filename,
+                "filesize": sf.filesize,
+                "content_type": sf.content_type,
+                "sha256": sf.sha256,
+                "owner": active_mb,
+                "is_zero_copy": True
+            }).encode("utf-8")
+            msg.add_attachment(
+                ptr_data,
+                maintype="application",
+                subtype="x-corpmail-shared-attachment",
+                filename=fname
+            )
+        msg["X-CorpMail-Zero-Copy-Attachments"] = "true"
+    else:
+        for _, file_bytes, fname, ctype in uploaded_files_data:
+            maintype, _, subtype = (ctype or "application/octet-stream").partition("/")
+            msg.add_attachment(
+                file_bytes,
+                maintype=maintype or "application",
+                subtype=subtype or "octet-stream",
+                filename=fname
+            )
 
     # Stamp internal provenance headers if internal delivery applies
     if routing_plan.internal_recipients:
@@ -470,9 +551,36 @@ async def send_email(
     # 5. Dispatch via Postfix SMTP ONLY if external internet recipients exist
     smtp_dispatched = False
     if routing_plan.external_recipients and getattr(settings, "ENVIRONMENT", "") != "test":
+        if uploaded_files_data and any(sf is not None for sf, _, _, _ in uploaded_files_data):
+            # Construct standard MIME with real bytes for outside internet mail servers
+            msg_ext = EmailMessage()
+            msg_ext["From"] = f"{active_mb} <{active_mb}>"
+            msg_ext["To"] = recipient.strip().lower()
+            if cc:
+                msg_ext["Cc"] = cc.strip().lower()
+            msg_ext["Subject"] = subject
+            msg_ext["Date"] = email.utils.formatdate(localtime=True)
+            msg_ext["Message-ID"] = email.utils.make_msgid(domain=settings.PRIMARY_HOSTNAME or "corpmail")
+            msg_ext["User-Agent"] = "Corporate Mail Platform Webmail/1.0"
+            if clean_text:
+                msg_ext.set_content(clean_text)
+            if body_html and body_html.strip():
+                msg_ext.add_alternative(body_html, subtype="html")
+            for _, fbytes, fname, ctype in uploaded_files_data:
+                maintype, _, subtype = (ctype or "application/octet-stream").partition("/")
+                msg_ext.add_attachment(
+                    fbytes,
+                    maintype=maintype or "application",
+                    subtype=subtype or "octet-stream",
+                    filename=fname
+                )
+            msg_to_send = msg_ext
+        else:
+            msg_to_send = msg
+
         try:
             with smtplib.SMTP("postfix", 25, timeout=2) as server:
-                server.send_message(msg)
+                server.send_message(msg_to_send)
                 smtp_dispatched = True
         except Exception:
             pass

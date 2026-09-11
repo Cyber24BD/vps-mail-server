@@ -1,7 +1,9 @@
+import type { StorageFileItem, StorageStats } from '../types';
+
 const API_BASE = '/api/v1';
 
 class ApiClient {
-  private getToken(): string | null {
+  public getToken(): string | null {
     return localStorage.getItem('corpmail_token');
   }
 
@@ -353,6 +355,63 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  // --- Storage & Media Vault ---
+  async getStorageStats(mailbox?: string) {
+    const params = new URLSearchParams();
+    if (mailbox) params.append('mailbox', mailbox);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return this.request<StorageStats>(`/storage/stats${qs}`);
+  }
+
+  async getStorageFiles(params?: {
+    category?: string;
+    search?: string;
+    sort_by?: string;
+    limit?: number;
+    offset?: number;
+    mailbox?: string;
+  }) {
+    const qs = new URLSearchParams();
+    if (params?.category) qs.append('category', params.category);
+    if (params?.search) qs.append('search', params.search);
+    if (params?.sort_by) qs.append('sort_by', params.sort_by);
+    if (params?.limit) qs.append('limit', params.limit.toString());
+    if (params?.offset) qs.append('offset', params.offset.toString());
+    if (params?.mailbox) qs.append('mailbox', params.mailbox);
+    const qStr = qs.toString() ? `?${qs.toString()}` : '';
+    return this.request<{ total: number; files: StorageFileItem[] }>(`/storage/files${qStr}`);
+  }
+
+  async deleteStorageFile(fileId: string, mailbox?: string) {
+    const params = new URLSearchParams();
+    if (mailbox) params.append('mailbox', mailbox);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return this.request<{ success: boolean; message: string }>(`/storage/files/${encodeURIComponent(fileId)}${qs}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async bulkDeleteStorageFiles(fileIds: string[], mailbox?: string) {
+    return this.request<{ success: boolean; deleted_count: number; failed_count: number }>(`/storage/bulk-delete`, {
+      method: 'POST',
+      body: JSON.stringify({ file_ids: fileIds, mailbox }),
+    });
+  }
+
+  getStoragePreviewUrl(fileId: string, mailbox?: string) {
+    const params = new URLSearchParams();
+    if (mailbox) params.append('mailbox', mailbox);
+    const qStr = params.toString() ? `?${params.toString()}` : '';
+    return `${API_BASE}/storage/files/${encodeURIComponent(fileId)}/preview${qStr}`;
+  }
+
+  getStorageDownloadUrl(fileId: string, mailbox?: string) {
+    const params = new URLSearchParams();
+    if (mailbox) params.append('mailbox', mailbox);
+    const qStr = params.toString() ? `?${params.toString()}` : '';
+    return `${API_BASE}/storage/files/${encodeURIComponent(fileId)}/download${qStr}`;
   }
 }
 

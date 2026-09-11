@@ -18,6 +18,7 @@ export type NavTab =
   | 'mailboxes'
   | 'aliases'
   | 'webmail'
+  | 'storage'
   | 'security'
   | 'diagnostics'
   | 'settings';
@@ -50,13 +51,14 @@ export const SidebarCard: React.FC<SidebarCardProps> = ({
     { id: 'mailboxes', label: 'Mailboxes & Quotas', icon: Users, badge: mailboxCount },
     { id: 'aliases', label: 'Aliases & Groups', icon: Forward },
     { id: 'webmail', label: 'Custom Webmail', icon: Mail },
+    { id: 'storage', label: 'Storage & Media', icon: HardDrive },
     { id: 'security', label: 'Security & SSL', icon: ShieldCheck },
     { id: 'diagnostics', label: 'Diagnostics & Logs', icon: Activity },
     { id: 'settings', label: 'System Settings', icon: Sliders },
   ];
 
   const navItems = userRole === 'user'
-    ? allNavItems.filter((item) => item.id === 'webmail')
+    ? allNavItems.filter((item) => item.id === 'webmail' || item.id === 'storage')
     : allNavItems;
 
   return (

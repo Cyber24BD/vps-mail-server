@@ -366,8 +366,24 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({
                     >
                       {att.filename}
                     </div>
-                    <div style={{ fontSize: '11px', color: '#9CA3AF' }}>
-                      {formatBytes(att.size)}
+                    <div style={{ fontSize: '11px', color: '#9CA3AF', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span>{formatBytes(att.size)}</span>
+                      {att.is_shared && (
+                        <span
+                          style={{
+                            fontSize: '9.5px',
+                            fontWeight: 700,
+                            padding: '0 4px',
+                            borderRadius: '3px',
+                            backgroundColor: '#EFF6FF',
+                            color: '#1D4ED8',
+                            border: '1px solid #BFDBFE',
+                          }}
+                          title="Zero-copy internal shared attachment"
+                        >
+                          ZERO-COPY
+                        </span>
+                      )}
                     </div>
                   </div>
                   <a
